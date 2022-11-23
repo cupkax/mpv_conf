@@ -1,6 +1,3 @@
-// Revised 06/18/22
-// https://gist.github.com/igv/8a77e4eb8276753b54bb94c1c50c317e
-//
 // Copyright (c) 2015-2021, bacondither
 // All rights reserved.
 //
@@ -28,13 +25,13 @@
 // Adaptive sharpen - version 2021-10-17
 // Tuned for use post-resize
 
-//!HOOK OUTPUT
+//!HOOK SCALED
 //!BIND HOOKED
-//!DESC adaptive-sharpen
+//!DESC Adaptive Sharpen [0.54]
 
 //--------------------------------------- Settings ------------------------------------------------
 
-#define curve_height    1.0                  // Main control of sharpening strength [>0]
+#define curve_height    0.54                 // Main control of sharpening strength [>0]
                                              // 0.3 <-> 2.0 is a reasonable range of values
 
 #define overshoot_ctrl  false                // Allow for higher overshoot if the current edge pixel
@@ -75,7 +72,7 @@
 #ifdef LUMA_tex
 #define CtL(RGB)       RGB.x
 #else
-#define CtL(RGB)       ( sqrt(dot(sat(RGB)*sat(RGB), vec3(0.2126, 0.7152, 0.0722))) )
+#define CtL(RGB)       ( sqrt(dot(sat(RGB)*sat(RGB), vec3(0.212655, 0.715158, 0.072187))) )
 #endif
 
 #define b_diff(pix)    ( (blur-luma[pix])*(blur-luma[pix]) )
