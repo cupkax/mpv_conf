@@ -18,14 +18,14 @@
 //!WIDTH NATIVE_CROPPED.w
 //!WHEN NATIVE_CROPPED.h POSTKERNEL.h >
 //!COMPONENTS 3
-//!DESC SSimDownscaler L2 1 [robidoux]
+//!DESC SSimDownscaler L2 pass 1
 
 #define axis 1
 
 #define offset      vec2(0,0)
 
 #define MN(B,C,x)   (x < 1.0 ? ((2.-1.5*B-(C))*x + (-3.+2.*B+C))*x*x + (1.-(B)/3.) : (((-(B)/6.-(C))*x + (B+5.*C))*x + (-2.*B-8.*C))*x+((4./3.)*B+4.*C))
-#define Kernel(x)   MN(0.3782157550939987, 0.3108921224530007, abs(x))
+#define Kernel(x)   MN(.0, .5, abs(x))
 #define taps        2.0
 
 vec4 hook() {
@@ -58,14 +58,14 @@ vec4 hook() {
 //!SAVE L2
 //!WHEN NATIVE_CROPPED.w POSTKERNEL.w >
 //!COMPONENTS 3
-//!DESC SSimDownscaler L2 2 [robidoux]
+//!DESC SSimDownscaler L2 pass 2
 
 #define axis 0
 
 #define offset      vec2(0,0)
 
 #define MN(B,C,x)   (x < 1.0 ? ((2.-1.5*B-(C))*x + (-3.+2.*B+C))*x*x + (1.-(B)/3.) : (((-(B)/6.-(C))*x + (B+5.*C))*x + (-2.*B-8.*C))*x+((4./3.)*B+4.*C))
-#define Kernel(x)   MN(0.3782157550939987, 0.3108921224530007, abs(x))
+#define Kernel(x)   MN(.0, .5, abs(x))
 #define taps        2.0
 
 vec4 hook() {
@@ -107,7 +107,7 @@ vec4 hook() {
 #define Kernel(x)   pow(1.0 / locality, abs(x))
 #define taps        3.0
 
-#define Luma(rgb)   ( dot(rgb, vec3(0.212655, 0.715158, 0.072187)) )
+#define Luma(rgb)   ( dot(rgb, vec3(0.2126, 0.7152, 0.0722)) )
 
 mat3x3 ScaleH(vec2 pos) {
     float low  = ceil(-0.5*taps - offset)[0];
@@ -158,7 +158,7 @@ vec4 hook() {
 //!BIND HOOKED
 //!BIND MR
 //!WHEN NATIVE_CROPPED.h POSTKERNEL.h >
-//!DESC SSimDownscaler Final
+//!DESC SSimDownscaler final pass
 
 #define locality    2.0
 
