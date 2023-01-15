@@ -1,0 +1,1 @@
+Contains mpv configuration to test gpu-next
