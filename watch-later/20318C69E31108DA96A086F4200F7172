@@ -1,0 +1,6 @@
+start=224.182000
+fullscreen=no
+ontop=yes
+af=lavfi=graph=%14%loudnorm=i=-20
+panscan=0.000000
+sid=1
