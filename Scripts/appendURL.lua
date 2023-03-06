@@ -21,31 +21,31 @@ function append(primaryselect)
   local clipboard = get_clipboard(primaryselect or false)
   if clipboard then
     mp.commandv("loadfile", clipboard, "append-play")
-    mp.osd_message("URL appended: "..clipboard)
-    msg.info("URL appended: "..clipboard)
+    mp.osd_message("URL appended: " .. clipboard)
+    msg.info("URL appended: " .. clipboard)
   end
 end
 
 --handles the subprocess response table and return clipboard if it was a success
 function handleres(res, args, primary)
   if not res.error and res.status == 0 then
-      return res.stdout
+    return res.stdout
   else
     --if clipboard failed try primary selection
-    if platform=='linux' and not primary then
+    if platform == 'linux' and not primary then
       append(true)
       return nil
     end
-    msg.error("There was an error getting "..platform.." clipboard: ")
-    msg.error("  Status: "..(res.status or ""))
-    msg.error("  Error: "..(res.error or ""))
-    msg.error("  stdout: "..(res.stdout or ""))
-    msg.error("args: "..utils.to_string(args))
+    msg.error("There was an error getting " .. platform .. " clipboard: ")
+    msg.error("  Status: " .. (res.status or ""))
+    msg.error("  Error: " .. (res.error or ""))
+    msg.error("  stdout: " .. (res.stdout or ""))
+    msg.error("args: " .. utils.to_string(args))
     return nil
   end
 end
 
-function get_clipboard(primary) 
+function get_clipboard(primary)
   if platform == 'linux' then
     local args = { 'xclip', '-selection', primary and 'primary' or 'clipboard', '-out' }
     return handleres(utils.subprocess({ args = args }), args, primary)
@@ -70,7 +70,7 @@ function get_clipboard(primary)
         [Console]::OpenStandardOutput().Write($u8clip, 0, $u8clip.Length)
       }]]
     }
-    return handleres(utils.subprocess({ args =  args }), args)
+    return handleres(utils.subprocess({ args = args }), args)
   elseif platform == 'macos' then
     local args = { 'pbpaste' }
     return handleres(utils.subprocess({ args = args }), args)
