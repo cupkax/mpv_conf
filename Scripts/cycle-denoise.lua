@@ -13,13 +13,13 @@ local key_binding_reverse = nil
 --     where the last 3 filters (dctdnoiz, owdenoise, nlmeans)
 --     are too slow to be used in playback
 local denoisers = {
-    "removegrain"
-    ,"atadenoise"
-    ,"hqdn3d"
-    ,"vaguedenoiser"
---    ,"dctdnoiz"
---    ,"owdenoise"
---    ,"nlmeans"
+    "removegrain",
+    "atadenoise",
+    "hqdn3d",
+    "vaguedenoiser"
+    --    ,"dctdnoiz"
+    --    ,"owdenoise"
+    --    ,"nlmeans"
 }
 
 local denoiser_count = #denoisers
@@ -32,7 +32,7 @@ function del_filter_if_present(label)
     -- necessary because mp.command('vf del @label:filter') raises an
     -- error if the filter doesn't exist
     local vfs = mp.get_property_native("vf")
-    for i,vf in pairs(vfs) do
+    for i, vf in pairs(vfs) do
         if vf["label"] == label then
             table.remove(vfs, i)
             mp.set_property_native("vf", vfs)
@@ -60,7 +60,6 @@ function cycle_denoise()
             denoise_label, denoisers[filter_index]
         )
     )
-
 end
 
 function cycle_denoise_reverse()
@@ -82,7 +81,6 @@ function cycle_denoise_reverse()
             denoise_label, denoisers[filter_index]
         )
     )
-
 end
 
 if key_binding then
