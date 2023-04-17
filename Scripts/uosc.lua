@@ -6,8 +6,8 @@ opt = require('mp.options')
 utils = require('mp.utils')
 msg = require('mp.msg')
 osd = mp.create_osd_overlay('ass-events')
-infinity = 1e309
-quarter_pi_sin = math.sin(math.pi / 4)
+INFINITY = 1e309
+QUARTER_PI_SIN = math.sin(math.pi / 4)
 
 -- Enables relative requires from `scripts` directory
 package.path = package.path .. ';' .. mp.find_config_file('scripts') .. '/?.lua'
@@ -101,7 +101,7 @@ defaults = {
 	curtain_opacity = 0.5,
 	stream_quality_options = '4320,2160,1440,1080,720,480,360,240,144',
 	video_types= '3g2,3gp,asf,avi,f4v,flv,h264,h265,m2ts,m4v,mkv,mov,mp4,mp4v,mpeg,mpg,ogm,ogv,rm,rmvb,ts,vob,webm,wmv,y4m',
-	audio_types= 'aac,aiff,ape,au,dsf,dts,flac,m4a,mid,midi,mka,mp3,mp4a,oga,ogg,opus,spx,tak,tta,wav,weba,wma,wv',
+	audio_types= 'aac,ac3,aiff,ape,au,dsf,dts,flac,m4a,mid,midi,mka,mp3,mp4a,oga,ogg,opus,spx,tak,tta,wav,weba,wma,wv',
 	image_types= 'apng,avif,bmp,gif,j2k,jp2,jfif,jpeg,jpg,jxl,mj2,png,svg,tga,tif,tiff,webp',
 	subtitle_types = 'aqt,ass,gsub,idx,jss,lrc,mks,pgs,pjs,psb,rt,slt,smi,sub,sup,srt,ssa,ssf,ttxt,txt,usf,vt,vtt',
 	default_directory = '~/',
@@ -296,12 +296,62 @@ end
 --[[ STATE ]]
 
 display = {width = 1280, height = 720, scale_x = 1, scale_y = 1, initialized = false}
-cursor = {hidden = true, hover_raw = false, x = 0, y = 0}
+cursor = {
+	x = 0,
+	y = 0,
+	hidden = true,
+	hover_raw = false,
+	-- Event handlers that are only fired on cursor, bound during render loop. Guidelines:
+	-- - element activations (clicks) go to `on_primary_down` handler
+	-- - `on_primary_up` is only for clearing dragging/swiping, and prevents autohide when bound
+	on_primary_down = nil,
+	on_primary_up = nil,
+	on_wheel_down = nil,
+	on_wheel_up = nil,
+	-- Called at the beginning of each render
+	reset_handlers = function()
+		cursor.on_primary_down, cursor.on_primary_up = nil, nil
+		cursor.on_wheel_down, cursor.on_wheel_up = nil, nil
+	end,
+	-- Enables pointer key group captures needed by handlers (called at the end of each render)
+	mbtn_left_enabled = nil,
+	wheel_enabled = nil,
+	decide_keybinds = function()
+		local enable_mbtn_left = (cursor.on_primary_down or cursor.on_primary_up) ~= nil
+		local enable_wheel = (cursor.on_wheel_down or cursor.on_wheel_up) ~= nil
+		if enable_mbtn_left ~= cursor.mbtn_left_enabled then
+			mp[(enable_mbtn_left and 'enable' or 'disable') .. '_key_bindings']('mbtn_left')
+			cursor.mbtn_left_enabled = enable_mbtn_left
+		end
+		if enable_wheel ~= cursor.wheel_enabled then
+			mp[(enable_wheel and 'enable' or 'disable') .. '_key_bindings']('wheel')
+			cursor.wheel_enabled = enable_wheel
+		end
+	end,
+	-- Cursor auto-hiding after period of inactivity
+	autohide = function()
+		if not cursor.on_primary_up and not Menu:is_open() then handle_mouse_leave() end
+	end,
+	autohide_timer = mp.add_timeout(mp.get_property_native('cursor-autohide') / 1000, function()
+		cursor.autohide()
+	end),
+	queue_autohide = function()
+		if options.autohide and not cursor.on_primary_up then
+			cursor.autohide_timer:kill()
+			cursor.autohide_timer:resume()
+		end
+	end
+}
 state = {
-	os = (function()
-		if os.getenv('windir') ~= nil then return 'windows' end
-		local homedir = os.getenv('HOME')
-		if homedir ~= nil and string.sub(homedir, 1, 6) == '/Users' then return 'macos' end
+	platform = (function()
+		local platform = mp.get_property_native('platform')
+		if platform then
+			if itable_index_of({'windows', 'darwin'}, platform) then return platform end
+		else
+			if os.getenv('windir') ~= nil then return 'windows' end
+			local homedir = os.getenv('HOME')
+			if homedir ~= nil and string.sub(homedir, 1, 6) == '/Users' then return 'darwin' end
+		end
 		return 'linux'
 	end)(),
 	cwd = mp.get_property('working-directory'),
@@ -336,10 +386,6 @@ state = {
 	has_chapter = false,
 	has_playlist = false,
 	shuffle = options.shuffle,
-	cursor_autohide_timer = mp.add_timeout(mp.get_property_native('cursor-autohide') / 1000, function()
-		if not options.autohide then return end
-		handle_mouse_leave()
-	end),
 	mouse_bindings_enabled = false,
 	uncached_ranges = nil,
 	cache = nil,
@@ -390,6 +436,7 @@ function update_fullormaxed()
 	state.fullormaxed = state.fullscreen or state.maximized
 	update_display_dimensions()
 	Elements:trigger('prop_fullormaxed', state.fullormaxed)
+	update_cursor_position(INFINITY, INFINITY)
 end
 
 function update_human_times()
@@ -447,18 +494,34 @@ function set_state(name, value)
 end
 
 function update_cursor_position(x, y)
+	local old_x, old_y = cursor.x, cursor.y
+
 	-- mpv reports initial mouse position on linux as (0, 0), which always
 	-- displays the top bar, so we hardcode cursor position as infinity until
 	-- we receive a first real mouse move event with coordinates other than 0,0.
 	if not state.first_real_mouse_move_received then
 		if x > 0 and y > 0 then state.first_real_mouse_move_received = true
-		else x, y = infinity, infinity end
+		else x, y = INFINITY, INFINITY end
 	end
 
 	-- add 0.5 to be in the middle of the pixel
 	cursor.x, cursor.y = (x + 0.5) / display.scale_x, (y + 0.5) / display.scale_y
 
-	Elements:update_proximities()
+	if old_x ~= cursor.x or old_y ~= cursor.y then
+		Elements:update_proximities()
+
+		if cursor.x == INFINITY or cursor.y == INFINITY then
+			cursor.hidden = true
+			Elements:trigger('global_mouse_leave')
+		elseif cursor.hidden then
+			cursor.hidden = false
+			Elements:trigger('global_mouse_enter')
+		end
+
+		Elements:proximity_trigger('mouse_move')
+		cursor.queue_autohide()
+	end
+
 	request_render()
 end
 
@@ -473,27 +536,7 @@ function handle_mouse_leave()
 		end
 	end
 
-	cursor.hidden = true
-	Elements:update_proximities()
-	Elements:trigger('global_mouse_leave')
-end
-
-function handle_mouse_enter(x, y)
-	cursor.hidden = false
-	update_cursor_position(x, y)
-	Elements:trigger('global_mouse_enter')
-end
-
-function handle_mouse_move(x, y)
-	update_cursor_position(x, y)
-	Elements:proximity_trigger('mouse_move')
-	request_render()
-
-	-- Restart timer that hides UI when mouse is autohidden
-	if options.autohide then
-		state.cursor_autohide_timer:kill()
-		state.cursor_autohide_timer:resume()
-	end
+	update_cursor_position(INFINITY, INFINITY)
 end
 
 function handle_file_end()
@@ -569,17 +612,16 @@ if options.click_threshold > 0 then
 	mp.enable_key_bindings('mouse_movement', 'allow-vo-dragging+allow-hide-cursor')
 end
 
-function update_mouse_pos(_, mouse)
+function handle_mouse_pos(_, mouse, options)
 	if not mouse then return end
 	if cursor.hover_raw and not mouse.hover then
 		handle_mouse_leave()
 	else
-		if cursor.hidden then handle_mouse_enter(mouse.x, mouse.y) end
-		handle_mouse_move(mouse.x, mouse.y)
+		update_cursor_position(mouse.x, mouse.y)
 	end
 	cursor.hover_raw = mouse.hover
 end
-mp.observe_property('mouse-pos', 'native', update_mouse_pos)
+mp.observe_property('mouse-pos', 'native', handle_mouse_pos)
 mp.observe_property('osc', 'bool', function(name, value) if value == true then mp.set_property('osc', 'no') end end)
 mp.register_event('file-loaded', function()
 	set_state('path', normalize_path(mp.get_property_native('path')))
@@ -657,16 +699,15 @@ mp.observe_property('duration', 'number', create_state_setter('duration', update
 mp.observe_property('speed', 'number', create_state_setter('speed', update_human_times))
 mp.observe_property('track-list', 'native', function(name, value)
 	-- checks the file dispositions
-	local is_image = false
-	local types = {sub = 0, audio = 0, video = 0}
+	local types = {sub = 0, image = 0, audio = 0, video = 0}
 	for _, track in ipairs(value) do
 		if track.type == 'video' then
-			is_image = track.image
-			if not is_image and not track.albumart then types.video = types.video + 1 end
+			if track.image or track.albumart then types.image = types.image + 1
+			else types.video = types.video + 1 end
 		elseif types[track.type] then types[track.type] = types[track.type] + 1 end
 	end
 	set_state('is_audio', types.video == 0 and types.audio > 0)
-	set_state('is_image', is_image)
+	set_state('is_image', types.image > 0 and types.video == 0 and types.audio == 0)
 	set_state('has_audio', types.audio > 0)
 	set_state('has_many_audio', types.audio > 1)
 	set_state('has_sub', types.sub > 0)
@@ -769,6 +810,29 @@ mp.observe_property('eof-reached', 'native', create_state_setter('eof_reached'))
 mp.observe_property('core-idle', 'native', create_state_setter('core_idle'))
 
 --[[ KEY BINDS ]]
+
+-- Pointer related binding groups
+function make_cursor_handler(event, cb)
+	return function(...)
+		call_maybe(cursor[event], ...)
+		call_maybe(cb, ...)
+		cursor.queue_autohide() -- refresh cursor autohide timer
+	end
+end
+mp.set_key_bindings({
+	{
+		'mbtn_left',
+		make_cursor_handler('on_primary_up'),
+		make_cursor_handler('on_primary_down', function(...)
+			handle_mouse_pos(nil, mp.get_property_native('mouse-pos'))
+		end),
+	},
+	{'mbtn_left_dbl', 'ignore'},
+}, 'mbtn_left', 'force')
+mp.set_key_bindings({
+	{'wheel_up', make_cursor_handler('on_wheel_up')},
+	{'wheel_down', make_cursor_handler('on_wheel_down')},
+}, 'wheel', 'force')
 
 -- Adds a key binding that respects rerouting set by `key_binding_overwrites` table.
 ---@param name string
@@ -907,11 +971,11 @@ bind_command('show-in-directory', function()
 	-- Ignore URLs
 	if not state.path or is_protocol(state.path) then return end
 
-	if state.os == 'windows' then
+	if state.platform == 'windows' then
 		utils.subprocess_detached({args = {'explorer', '/select,', state.path}, cancellable = false})
-	elseif state.os == 'macos' then
+	elseif state.platform == 'macos' then
 		utils.subprocess_detached({args = {'open', '-R', state.path}, cancellable = false})
-	elseif state.os == 'linux' then
+	elseif state.platform == 'linux' then
 		local result = utils.subprocess({args = {'nautilus', state.path}, cancellable = false})
 
 		-- Fallback opens the folder with xdg-open instead
@@ -1092,11 +1156,11 @@ bind_command('open-config-directory', function()
 	if config then
 		local args
 
-		if state.os == 'windows' then
+		if state.platform == 'windows' then
 			args = {'explorer', '/select,', config.path}
-		elseif state.os == 'macos' then
+		elseif state.platform == 'macos' then
 			args = {'open', '-R', config.path}
-		elseif state.os == 'linux' then
+		elseif state.platform == 'linux' then
 			args = {'xdg-open', config.dirname}
 		end
 
