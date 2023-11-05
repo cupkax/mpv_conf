@@ -7,3 +7,5 @@ This config is built to test gpu-next with 4K and HDR support. It takes inspirat
 - [mpv-lazy](https://github.com/hooke007/MPV_lazy)
 
 - [classicjazz's config](https://github.com/classicjazz/mpv-config)
+
+- [dyphire's mpv-config](https://github.com/dyphire/mpv-config)
