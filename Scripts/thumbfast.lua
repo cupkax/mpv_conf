@@ -47,7 +47,15 @@ local options = {
     direct_io = false,
 
     -- Custom path to the mpv executable
-    mpv_path = "mpv"
+    mpv_path = "mpv",
+
+    -- Specifies a blacklist of video extensions to ignore
+    blacklist_ext = "bdmv,ifo",
+
+    -- excluded directories for shared, #windows: ["X:", "Z:", "F:/Download/", "Download"]
+    excluded_dir = [[
+        []
+    ]],
 }
 
 mp.utils = require "mp.utils"
@@ -57,6 +65,39 @@ mp.options.read_options(options, "thumbfast")
 local properties = {}
 local pre_0_30_0 = mp.command_native_async == nil
 local pre_0_33_0 = true
+
+local function split(input)
+    local ret = {}
+    for str in string.gmatch(input, "([^,]+)") do
+        ret[#ret + 1] = str
+    end
+    return ret
+end
+
+local function exclude(extension, tab)
+    if #tab > 0 then
+        for _, ext in pairs(tab) do
+            if extension == ext then
+                return true
+            end
+        end
+    else
+        return
+    end
+end
+
+local function need_ignore(tab, val)
+    for index, element in ipairs(tab) do
+        if string.find(val, element) then
+            return true
+        end
+    end
+    return false
+end
+
+local function is_protocol(path)
+    return type(path) == 'string' and (path:find('^%a[%w.+-]-://') ~= nil or path:find('^%a[%w.+-]-:%?') ~= nil)
+end
 
 function subprocess(args, async, callback)
     callback = callback or function() end
@@ -187,6 +228,10 @@ trap "kill 0" EXIT
 while [[ $# -ne 0 ]]; do case $1 in --mpv-ipc-fd=*) MPV_IPC_FD=${1/--mpv-ipc-fd=/} ;; esac; shift; done
 if echo "print-text thumbfast" >&"$MPV_IPC_FD"; then echo -n > "$MPV_IPC_PATH"; tail -f "$MPV_IPC_PATH" >&"$MPV_IPC_FD" & while read -r -u "$MPV_IPC_FD" 2>/dev/null; do :; done; fi
 ]=]
+
+local cached_ranges = {}
+local ext_blacklist = split(options.blacklist_ext)
+local excluded_dir = mp.utils.parse_json(options.excluded_dir)
 
 local function get_os()
     local raw_os_name = ""
@@ -327,7 +372,8 @@ local function vf_string(filters, full)
     end
 
     if (full and options.tone_mapping ~= "no") or options.tone_mapping == "auto" then
-        if properties["video-params"] and properties["video-params"]["primaries"] == "bt.2020" then
+        local tone_mapping = vo_tone_mapping()
+        if properties["video-params"] and (properties["video-params"]["primaries"] == "bt.2020" or tone_mapping) then
             local tone_mapping = options.tone_mapping
             if tone_mapping == "auto" then
                 tone_mapping = last_tone_mapping or properties["tone-mapping"]
@@ -339,11 +385,12 @@ local function vf_string(filters, full)
                 tone_mapping = "hable"
             end
             last_tone_mapping = tone_mapping
-            vf = vf .. "zscale=transfer=linear,format=gbrpf32le,tonemap="..tone_mapping..",zscale=transfer=bt709,"
+            vf = vf.."scale=w="..effective_w..":h="..effective_h..par..",pad=w="..effective_w..":h="..effective_h..":x=-1:y=-1,format=yuv420p,"
+            .."hwupload,libplacebo=tonemapping="..tone_mapping..":colorspace=bt709:color_primaries=bt709:color_trc=bt709:format=yuv420p,hwdownload,format=bgra"
+        else
+            vf = vf.."scale=w="..effective_w..":h="..effective_h..par..",pad=w="..effective_w..":h="..effective_h..":x=-1:y=-1,format=bgra"
         end
-    end
-
-    if full then
+    elseif full then
         vf = vf.."scale=w="..effective_w..":h="..effective_h..par..",pad=w="..effective_w..":h="..effective_h..":x=-1:y=-1,format=bgra"
     end
 
@@ -379,10 +426,16 @@ local function info(w, h)
     local rotate = properties["video-params"] and properties["video-params"]["rotate"]
     local image = properties["current-tracks/video"] and properties["current-tracks/video"]["image"]
     local albumart = image and properties["current-tracks/video"]["albumart"]
+    local cache_state = properties["demuxer-cache-state"]
+    local dir = mp.utils.split_path(properties["path"]):gsub("\\", "/")
+    local file_ext = properties["path"]:match("%.([^%.]+)$")
+    if cache_state then cached_ranges = cache_state["seekable-ranges"] end
 
     disabled = (w or 0) == 0 or (h or 0) == 0 or
         has_vid == 0 or
-        (properties["demuxer-via-network"] and not options.network) or
+        need_ignore(excluded_dir, dir) or
+        (file_ext and exclude(file_ext:lower(), ext_blacklist)) or
+        ((properties["demuxer-via-network"] or is_protocol(properties["path"]) or (properties["cache"] == "auto" and #cached_ranges > 0)) and not options.network) or
         (albumart and not options.audio) or
         (image and not albumart) or
         force_disabled
@@ -446,14 +499,10 @@ local function spawn(time)
         "--ytdl-format=worst", "--demuxer-readahead-secs=0", "--demuxer-max-bytes=128KiB",
         "--vd-lavc-skiploopfilter=all", "--vd-lavc-software-fallback=1", "--vd-lavc-fast", "--vd-lavc-threads=2", "--hwdec="..(options.hwdec and "auto" or "no"),
         "--vf="..vf_string(filters_all, true),
-        "--sws-scaler=fast-bilinear",
+        "--zimg-scaler=bilinear", "--zimg-fast=yes",
         "--video-rotate="..last_rotate,
         "--ovc=rawvideo", "--of=image2", "--ofopts=update=1", "--o="..options.thumbnail
     }
-
-    if not pre_0_30_0 then
-        table.insert(args, "--sws-allow-zimg=no")
-    end
 
     if os_name == "darwin" and properties["macos-app-activation-policy"] then
         table.insert(args, "--macos-app-activation-policy=accessory")
@@ -907,7 +956,9 @@ mp.observe_property("video-out-params", "native", update_property_dirty)
 mp.observe_property("video-params", "native", update_property_dirty)
 mp.observe_property("vf", "native", update_property_dirty)
 mp.observe_property("tone-mapping", "native", update_property_dirty)
+mp.observe_property("cache", "native", update_property)
 mp.observe_property("demuxer-via-network", "native", update_property)
+mp.observe_property('demuxer-cache-state', 'native', update_property)
 mp.observe_property("stream-open-filename", "native", update_property)
 mp.observe_property("macos-app-activation-policy", "native", update_property)
 mp.observe_property("current-vo", "native", update_property)

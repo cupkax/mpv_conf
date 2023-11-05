@@ -1,5 +1,9 @@
-_cache/
+_misc_files/
+playlists/
 commit-rename.sh
 saved-props.json
-uosc/
-playlists/
+*.log
+*.xml
+*.txt
+*.history
+scripts/webtorrent.js

@@ -24,8 +24,7 @@
     There are no limits to the number of commands, and the script message can be used as often as one wants,
     the script stores the current iteration for each unique cycle command, so there should be no overlap
     unless one binds the exact same command string (including spacing)
-]=====]
---
+]=====]--
 
 local mp = require 'mp'
 local msg = require 'mp.msg'
@@ -35,7 +34,7 @@ local iterators = {}
 
 --main function to identify and run the cycles
 local function main(...)
-    local commands = { ... }
+    local commands = {...}
 
     --to identify the specific cycle we'll concatenate all the strings together to use as our table key
     local str = table.concat(commands, " | ")
@@ -51,7 +50,7 @@ local function main(...)
 
     --mp.command should run the commands exactly as if they were entered in input.conf.
     --This should provide universal support for all input.conf command syntax
-    local cmd = commands[iterators[str]]
+    local cmd = commands[ iterators[str] ]
     msg.verbose('sending command:', cmd)
     mp.command(cmd)
 end
