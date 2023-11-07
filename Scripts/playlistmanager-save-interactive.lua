@@ -68,4 +68,4 @@ end
 mp.register_script_message("playlistmanager-save-interactive", activate)
 
 -- this will enable the feature in playlistmanager
-mp.command("script-message playlistmanager enable-interactive-save \"enable interactive filenaming in playlistmanager\"")
+mp.command("script-message playlistmanager enable-interactive-save \"enable interactive filenaming in playlistmanager\"")

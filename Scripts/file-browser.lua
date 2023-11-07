@@ -2287,4 +2287,3 @@ end)
 --declares the keybind to open the browser
 mp.add_key_binding('MENU','browse-files', toggle)
 mp.add_key_binding('Ctrl+o','open-browser', open)
-

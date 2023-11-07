@@ -2924,4 +2924,4 @@ end
 
 for i = 1, #o.keybinds_quicksave_keybind do
 	mp.add_forced_key_binding(o.keybinds_quicksave_keybind[i], 'keybind-slot-save-' .. i, function()quicksave_slot(i) end)
-end
+end

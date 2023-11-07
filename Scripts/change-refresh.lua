@@ -132,13 +132,18 @@ function updateOptions(changes)
         checkRatesString()
         updateTable()
     end
+
+    --allow the auto option to be changed at runtime using profiles
+    if changes and changes.auto and options.auto then
+        mp.add_timeout(1.5, matchVideo)
+    end
 end
 read_options(options, 'changerefresh', updateOptions)
 
 --checks if the rates string contains any invalid characters
 function checkRatesString()
     local str = options.rates
-    
+
     str = str:gsub(";", '')
     str = str:gsub("%-", '')
 
@@ -261,6 +266,7 @@ function changeRefresh(width, height, rate, display)
 
     if (process.status < 0) then
         local error = process.error_string
+        msg.warn(utils.to_string(process))
         msg.error('Error sending command')
         if error == "init" then
             msg.error('could not start nircmd - make sure you are using the right path')

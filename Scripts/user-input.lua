@@ -760,4 +760,3 @@ mp.register_script_message("request-user-input", function(req)
         msg.error(err)
     end
 end)
-
