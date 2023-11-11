@@ -1,5 +1,6 @@
 misc_files/
 playlists/
+files/
 commit-rename.sh
 saved-props.json
 *.log

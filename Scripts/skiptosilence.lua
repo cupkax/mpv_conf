@@ -24,10 +24,8 @@
 # The default is -30 (yes, negative). -60 is very sensitive,
 # -10 is more tolerant to noise.
 quietness = -30
-
 # Minimum duration of silence to trigger.
 duration = 0.1
-
 # The fast-forwarded audio can sound jarring. Set to 'yes'
 # to mute it while skipping.
 mutewhileskipping = no
@@ -125,4 +123,4 @@ end
 
 options.read_options(opts)
 
-mp.add_key_binding("F3", "skip-to-silence", doSkip)
+mp.register_script_message("skip-to-silence", doSkip)

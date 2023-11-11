@@ -436,3 +436,4 @@ mp.register_script_message("sub-select", function(arg)
     if not continue_script() then return end
     async_load()
 end)
+
