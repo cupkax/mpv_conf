@@ -7,4 +7,5 @@ saved-props.json
 *.xml
 *.txt
 *.history
+dyphire_config_commit_merge_status.txt
 scripts/webtorrent.js
