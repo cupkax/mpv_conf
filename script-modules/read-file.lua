@@ -65,9 +65,9 @@ end
 
 --gets the path of a temporary file that can be used by the script
 local function get_temp_file_name()
-    local file = os.tmpname()
+    local file = os.tmpname():gsub('^\\', '')
     if not PLATFORM_WINDOWS then return file
-    else return utils.join_path(mp.command_native({"expand-path", "~/AppData/Local/Temp"}), file) end
+    else return utils.join_path(os.getenv("TEMP"), file) end
 end
 
 --creates a new temporary file with the given contents, and returns a file read handle for this file

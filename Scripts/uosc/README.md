@@ -4,7 +4,7 @@
 		Feature-rich minimalist proximity-based UI for <a href="https://mpv.io">MPV player</a>.
 	</p>
 	<br/>
-	<a href="https://user-images.githubusercontent.com/47283320/195073006-bfa72bcc-89d2-4dc7-b8dc-f3c13273910c.webm"><img src="https://user-images.githubusercontent.com/47283320/195072935-44d591d9-00bb-4a55-8795-9cf81f65d397.png" alt="Preview screenshot"></a>
+	<a href="https://user-images.githubusercontent.com/47283320/195073006-bfa72bcc-89d2-4dc7-b8dc-f3c13273910c.webm"><img src="https://github.com/tomasklaen/uosc/assets/47283320/9f99f2ae-3b65-4935-8af3-8b80c605f022" alt="Preview screenshot"></a>
 </div>
 
 Features:
@@ -16,7 +16,7 @@ Features:
 -   Fast and efficient thumbnails with [thumbfast](https://github.com/po5/thumbfast) integration.
 -   UIs for:
     -   Selecting subtitle/audio/video track.
-- [Downloading subtitles](#download-subtitles) from [Open Subtitles](https://www.opensubtitles.com).
+    -   [Downloading subtitles](#download-subtitles) from [Open Subtitles](https://www.opensubtitles.com).
     -   Loading external subtitles.
     -   Selecting stream quality.
     -   Quick directory and playlist navigation.
@@ -224,6 +224,7 @@ For subtitles, the explorer only displays file types defined in `subtitle_types`
 A menu to search and download subtitles from [Open Subtitles](https://www.opensubtitles.com). It can also be opened by selecting the **Download** option in `subtitles` menu.
 
 We fetch results for languages defined in *uosc**'s `languages` option, which defaults to your mpv `slang` configuration.
+
 We also hash the current file and send the hash to Open Subtitles so you can search even with empty query and if your file is known, you'll get subtitles exactly for it.
 
 Subtitles will be downloaded to the same directory as currently opened file, or `~~/subtitles` (folder in your mpv config directory) if playing a URL.
@@ -747,7 +748,13 @@ Other scripts usually choose to go the route of adding python scripts and requir
 
 #### Why don't you have `uosc-{platform}.zip` releases and only include binaries for the concerned platform in each?
 
-Then you wouldn't be able to sync your mpv config between platforms and everything _just work_. And the binaries are small, this is not a problem.
+Then you wouldn't be able to sync your mpv config between platforms and everything _just work_.
+
+#### Why is the release reported as malicious by some antiviruses?
+
+Some obscure antiviruses find our binaries suspicious due to the way go packages them. I think the only way to solve that would be to sign them (not 100% sure though), but I'm not paying to work on free stuff. If anyone is bothered by this, and would be willing to donate a code signing certificate, let me know.
+
+If you want to check the binaries are safe, the code is in `src/ziggy`, and you can build them yourself by running `tools/build ziggy` in the repository root and compare.
 
 #### Why _uosc_?
 
