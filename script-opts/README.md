@@ -1,14 +1,14 @@
-### 该文件夹下存放mpv脚本的对应设置文件
+### This folder stores the corresponding setting files for the mpv script
 
-通常脚本设置文件名与所属脚本文件同名，注意脚本文件名中的`-`默认需转译成`_`。实际以脚本开发者设定为准。
+Usually the script setting file name has the same name as the script file it belongs to. Note that `-` in the script file name needs to be translated into `_` by default. The actual settings are subject to the script developer's settings.
 
-脚本设置文件切勿美化格式（例如加入无意义的空格）；切勿在参数后注释（应单独另起一行写注释）。
+Do not beautify the format of the script settings file (such as adding meaningless spaces); do not comment after the parameters (comments should be written on a separate line).
 
-脚本及其设置文件可能不支持windows的CRLF换行（尝试更改为LF）。
+The script and its settings file may not support Windows' CRLF line wrapping (try changing to LF).
 
-以上所述情况在自行修改的过程中都可能导致脚本设置文件（部分）失效。
+The above situations may cause (part of) the script settings file to become invalid during the process of self-modification.
 
-以下为mpv内置脚本所使用的设置文件：
+The following is the settings file used by the mpv built-in script:
 
 ```
 console.conf

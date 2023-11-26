@@ -7,7 +7,6 @@
 | simple-mpv-webui (group)* | Implement a simple webui for mpv (depends on [luasocket](https://github.com/57op/simple-mpv-webui-windows-libs) ; configuration file: [webui.conf](../script-opts/webui.conf)) |
 | uosc* (group) | Third-party advanced OSC script, which implements many practical functions (configuration file: [uosc.conf](../script-opts/uosc.conf)) |
 | autoload.lua* | Automatically load files in the same directory (configuration file: [autoload.conf](../script-opts/autoload.conf)) |
-| autodeint.lua      | Automatically detect and switch deinterlacing |
 | auto-save-state.lua* | Automatically save the playback progress every 1 minute (rather than when exiting), and automatically delete the progress when the playback is completed |
 | blacklist-extensions.lua         | mpv Black/white list of file loading types when dragging and dropping directories directly |
 | change-refresh.lua   | Change the monitor refresh rate (depends on [nircmd](https://www.nirsoft.net/utils/nircmd.html) ，configuration file: [changerefresh.conf](../script-opts/changerefresh.conf)) |
@@ -33,7 +32,6 @@
 | ordered-chapters-playlist.lua | Ordered Chapter Playlist |
 | persist_properties.lua | Monitor and save global changes in preset parameters (such as volume) (configuration file: [persist_properties.conf](../script-opts/persist_properties.conf)) |
 | playlistmanager.lua* | OSD interactive playlist (configuration file: [playlistmanager.conf](../script-opts/playlistmanager.conf)) |
-| playlistmanager-save-interactive.lua | Enhanced script for playlistmanager.lua to rename playlists when saving |
 | quality-menu.lua* | Switch the OSD interactive menu of ytdl video/audio quality (depends on yt-dlp/youtube-dl; configuration file: [quality-menu.conf](../script-opts/quality-menu.conf)) |
 | recentmenu.lua* | Simple playback history menu integrated with uosc (depends on uosc; configuration file: [recentmenu.conf](../script-opts/recentmenu.conf)) |
 | segment-linking.lua | Implement support for matroska [hard segment linking](https://www.ietf.org/archive/id/draft-ietf-cellar-matroska-06.html#name-hard-linking)  (depends on  [read-file.lua](../script-modules/read-file.lua), `mkvinfo`; configuration file: [segment_linking.conf](../script-opts/segment_linking.conf)) |
@@ -43,6 +41,7 @@
 | slicing_copy.lua* | Cut video clips (depends on ffmpeg; configuration file: [slicing_copy.conf](../script-opts/slicing_copy.conf)) |
 | smartcopypaste_II.lua*       | OSD interactive clipping menu, smart copy and paste video path and progress (configuration file: [smartcopypaste_II.conf](../script-opts/smartcopypaste_II.conf)); dynamic key bindings are in the configuration file of the same name |
 | sponsorblock_minimal.lua | Skip sponsored segments of YouTube videos (depends on curl; configuration file: [sponsorblock_minimal.conf](../script-opts/sponsorblock_minimal.conf)) |
+| subtitle-lines.lua | Subtitle-lines Menu with uosc (depends on uosc) |
 | sub_export.lua* | Export the inner subtitles of the current video (depends on ffmpeg, supports subtitles in srt,ass and sup formats; configuration file: [sub_export.conf](../script-opts/sub_export.conf)) |
 | sub-fonts-dir-auto.lua* | Automatically find the fonts subdirectory in the playback directory and write the `sub-fonts-dir` parameter to automatically load a specific font path |
 | sub-select.lua | Specify subtitle track priority/black and white list (configuration file: [sub_select.conf](../script-opts/sub_select.conf); [sub-select.json](../script-opts/sub-select.json)) |
