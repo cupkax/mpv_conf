@@ -56,6 +56,8 @@ function sort_filenames_windows(filenames)
 		local b_wide = winapi.utf8_to_wide(b)
 		return winapi.shlwapi.StrCmpLogicalW(a_wide, b_wide) == -1
 	end)
+
+	return filenames
 end
 
 function sort_filenames_lua(filenames)
@@ -82,7 +84,7 @@ function sort_filenames(filenames)
 	if state.platform == 'windows' and is_ffi_loaded then
 		sort_filenames_windows(filenames)
 	else
-		 sort_filenames_lua(filenames)
+		sort_filenames_lua(filenames)
 	end
 end
 
