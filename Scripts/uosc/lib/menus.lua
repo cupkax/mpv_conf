@@ -92,41 +92,19 @@ function create_self_updating_menu_opener(opts)
 end
 
 function create_select_tracklist_type_menu_opener(menu_title, track_type, track_prop, load_command, download_command)
-	----- string
-	local function is_empty(input)
-		if input == nil or input == "" then
-			return true
-		end
-	end
-
-	local function replace(str, what, with)
-		if is_empty(str) then return "" end
-		if is_empty(what) then return str end
-		if with == nil then with = "" end
-		what = string.gsub(what, "[%(%)%.%+%-%*%?%[%]%^%$%%]", "%%%1")
-		with = string.gsub(with, "[%%]", "%%%%")
-		return string.gsub(str, what, with)
-	end
-
-	local function esc_for_title(str)
-		str = str:gsub('^[_%.%-%s]*', '')
-				:gsub('%.([^%.]+)$', '')
-		return str
-	end
-
-	local function esc_for_codec(str)
-		if str:find("MPEG2") then str = "MPEG2"
-		elseif str:find("DVVIDEO") then str = "DV"
-		elseif str:find("PCM") then str = "PCM"
-		elseif str:find("PGS") then str = "PGS"
-    	elseif str:find("SUBRIP") then str = "SRT"
-    	elseif str:find("VTT") then str = "VTT"
-    	elseif str:find("DVD_SUB") then str = "VOB_SUB"
-    	elseif str:find("DVB_SUB") then str = "DVB_SUB"
-    	elseif str:find("DVB_TELE") then str = "TELETEXT"
-    	elseif str:find("ARIB") then str = "ARIB"
-    	end
-		return str
+	local function escape_codec(str)
+		if not str or str == '' then return '' end
+		if str:find("mpeg2") then return "mpeg2"
+		elseif str:find("dvvideo") then return "dv"
+		elseif str:find("pcm") then return "pcm"
+		elseif str:find("pgs") then return "pgs"
+		elseif str:find("subrip") then return "srt"
+		elseif str:find("vtt") then return "vtt"
+		elseif str:find("dvd_sub") then return "vob"
+		elseif str:find("dvb_sub") then return "dvb"
+		elseif str:find("dvb_tele") then return "teletext"
+		elseif str:find("arib") then return "arib"
+		else return str end
 	end
 
 	local function serialize_tracklist(tracklist)
@@ -166,21 +144,25 @@ function create_select_tracklist_type_menu_opener(menu_title, track_type, track_
 					h(track['demux-w'] and (track['demux-w'] .. 'x' .. track['demux-h']) or (track['demux-h'] .. 'p'))
 				end
 				if track['demux-fps'] then h(string.format('%.5gfps', track['demux-fps'])) end
-				h(esc_for_codec(track.codec:upper()))
+				if track['codec'] then h(escape_codec(track.codec)) end
 				if track['audio-channels'] then
 					h(track['audio-channels'] == 1
 						and t('%s channel', track['audio-channels'])
 						or t('%s channels', track['audio-channels']))
 				end
 				if track['demux-samplerate'] then h(string.format('%.3gkHz', track['demux-samplerate'] / 1000)) end
-				if track['demux-bitrate'] then h(string.format('%.3gkpbs', track['demux-bitrate'] / 1000)) end
+				if track['demux-bitrate'] then h(string.format('%.3gkbps', track['demux-bitrate'] / 1000)) end
 				if track.forced then h(t('forced')) end
 				if track.default then h(t('default')) end
 				if track.external then h(t('external')) end
 
-				local filename = mp.get_property_native('filename/no-ext')
-				if track.title then track.title = replace(track.title, filename, '') end
-				if track.external then track.title = esc_for_title(track.title) end
+				local filename = mp.get_property_native('filename/no-ext'):gsub("[%(%)%.%%%+%-%*%?%[%]%^%$]", "%%%0")
+				if track.external and track.title and filename then
+					track.title = track.title:gsub(filename .. '%.?', '')
+					if track.title:lower() == track.codec:lower() then
+						track.title = nil
+					end
+				end
 
 				items[#items + 1] = {
 					title = (track.title and track.title or t('Track %s', track.id)),
@@ -224,11 +206,11 @@ function create_select_tracklist_type_menu_opener(menu_title, track_type, track_
 	})
 end
 
----@alias NavigationMenuOptions {type: string, title?: string, allowed_types?: string[], active_path?: string, selected_path?: string; on_open?: fun(); on_close?: fun()}
+---@alias NavigationMenuOptions {type: string, title?: string, allowed_types?: string[], keep_open?: boolean, active_path?: string, selected_path?: string; on_open?: fun(); on_close?: fun()}
 
 -- Opens a file navigation menu with items inside `directory_path`.
 ---@param directory_path string
----@param handle_select fun(path: string): nil
+---@param handle_select fun(path: string, mods: Modifiers): nil
 ---@param opts NavigationMenuOptions
 function open_file_navigation_menu(directory_path, handle_select, opts)
 	directory = serialize_path(normalize_path(directory_path))
@@ -248,8 +230,8 @@ function open_file_navigation_menu(directory_path, handle_select, opts)
 
 	if not files or not directories then return end
 
-	sort_filenames(directories)
-	sort_filenames(files)
+	sort_strings(directories)
+	sort_strings(files)
 
 	-- Pre-populate items with parent directory selector if not at root
 	-- Each item value is a serialized path table it points to.
@@ -289,6 +271,7 @@ function open_file_navigation_menu(directory_path, handle_select, opts)
 		local is_to_parent = is_drives or #path < #directory_path
 		local inheritable_options = {
 			type = opts.type, title = opts.title, allowed_types = opts.allowed_types, active_path = opts.active_path,
+			keep_open = opts.keep_open,
 		}
 
 		if is_drives then
@@ -311,7 +294,7 @@ function open_file_navigation_menu(directory_path, handle_select, opts)
 			return
 		end
 
-		if info.is_dir and not meta.modifiers.alt then
+		if info.is_dir and not meta.modifiers.alt and not meta.modifiers.ctrl then
 			--  Preselect directory we are coming from
 			if is_to_parent then
 				inheritable_options.selected_path = directory.path
@@ -319,7 +302,7 @@ function open_file_navigation_menu(directory_path, handle_select, opts)
 
 			open_file_navigation_menu(path, handle_select, inheritable_options)
 		else
-			handle_select(path)
+			handle_select(path, meta.modifiers)
 		end
 	end
 
@@ -331,6 +314,7 @@ function open_file_navigation_menu(directory_path, handle_select, opts)
 		type = opts.type,
 		title = opts.title or directory.basename .. path_separator,
 		items = items,
+		keep_open = opts.keep_open,
 		selected_index = selected_index,
 	}
 	local menu_options = {on_open = opts.on_open, on_close = opts.on_close, on_back = handle_back}
@@ -573,11 +557,19 @@ function open_open_file_menu()
 
 	menu = open_file_navigation_menu(
 		directory,
-		function(path) mp.commandv('loadfile', path) end,
+		function(path, mods)
+			if mods.ctrl then
+				mp.commandv('loadfile', path, 'append')
+			else
+				mp.commandv('loadfile', path)
+				Menu:close()
+			end
+		end,
 		{
 			type = 'open-file',
 			allowed_types = config.types.media,
 			active_path = active_file,
+			keep_open = true,
 			on_open = function() mp.register_event('file-loaded', handle_file_loaded) end,
 			on_close = function() mp.unregister_event(handle_file_loaded) end,
 		}
@@ -849,7 +841,7 @@ function open_subtitle_downloader()
 			type = menu_type,
 			title = t('enter query'),
 			items = initial_items,
-			palette = true,
+			search_style = 'palette',
 			on_search = handle_search,
 			search_debounce = 'submit',
 			search_suggestion = search_suggestion,

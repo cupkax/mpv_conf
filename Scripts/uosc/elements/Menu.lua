@@ -757,8 +757,10 @@ function Menu:search_internal(menu, no_select_first)
 		end
 		menu.items = search_items(menu.search.source.items, query, search_submenus)
 		-- Select 1st item in search results
-		menu.scroll_y = 0
-		if not no_select_first then self:select_index(1, menu) end
+		if not no_select_first then
+			menu.scroll_y = 0
+			self:select_index(1, menu)
+		end
 	end
 	self:update_content_dimensions()
 end
@@ -1026,7 +1028,7 @@ function Menu:enable_key_bindings()
 		self:create_key_action('open_selected_item_soft', {shift = true}))
 	self:add_key_binding('shift+mbtn_left', 'menu-select3', self:create_modified_mbtn_left_handler({shift = true}))
 	self:add_key_binding('ctrl+mbtn_left', 'menu-select4', self:create_modified_mbtn_left_handler({ctrl = true}))
-	self:add_key_binding('alt+mbtn_left', 'menu-select4', self:create_modified_mbtn_left_handler({alt = true}))
+	self:add_key_binding('alt+mbtn_left', 'menu-select5', self:create_modified_mbtn_left_handler({alt = true}))
 	self:add_key_binding('mbtn_back', 'menu-back-alt3', self:create_key_action('back'))
 	self:add_key_binding('bs', 'menu-back-alt4', self:create_key_action('key_bs'), {repeatable = true, complex = true})
 	self:add_key_binding('shift+bs', 'menu-clear-query', self:create_key_action('key_bs', {shift = true}),
@@ -1296,7 +1298,7 @@ function Menu:render()
 				menu.ass_safe_title = ass_escape(menu.title)
 			end
 
-			-- Background
+            -- Background
 			if menu.search then
 				ass:rect(ax + 3, rect.ay + 3, bx - 3, rect.ay + title_height - 1, {
 					color = fg .. '\\1a&HFF', opacity = menu_opacity * 0.1,
