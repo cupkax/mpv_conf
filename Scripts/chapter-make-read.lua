@@ -1,5 +1,5 @@
 --[[
-  * chapter-make-read.lua v.2024-01-14
+  * chapter-make-read.lua v.2024-03-24
   *
   * AUTHORS: dyphire
   * License: MIT
@@ -7,7 +7,6 @@
 --]]
 
 --[[
-Copyright (c) 2023 Mariusz Libera <mariusz.libera@gmail.com>
 Copyright (c) 2023 dyphire <qimoge@gmail.com>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -54,7 +53,6 @@ SOFTWARE.
 
 local msg = require 'mp.msg'
 local utils = require 'mp.utils'
-local input = require 'mp.input'
 local options = require "mp.options"
 
 local o = {
@@ -84,9 +82,10 @@ local o = {
 
 options.read_options(o)
 
-if not input then
+local success, input = pcall(require, 'mp.input')
+if not success then
     -- Requires: https://github.com/CogentRedTester/mpv-user-input
-    package.path = mp.command_native({ "expand-path", "~~/script-modules/?.lua;" }) .. package.path
+    package.path = mp.command_native({"expand-path", "~~/script-modules/?.lua;"}) .. package.path
     user_input_module, input = pcall(require, "user-input-module")
 end
 
@@ -132,14 +131,13 @@ if global_chapters_dir and global_chapters_dir ~= '' then
     local meta, meta_error = utils.file_info(global_chapters_dir)
     if not meta or not meta.is_dir then
         local is_windows = package.config:sub(1, 1) == "\\"
-        local windows_args = { 'powershell', '-NoProfile', '-Command', 'mkdir', string.format("\"%s\"",
-            global_chapters_dir) }
+        local windows_args = { 'powershell', '-NoProfile', '-Command', 'mkdir', string.format("\"%s\"", global_chapters_dir) }
         local unix_args = { 'mkdir', '-p', global_chapters_dir }
         local args = is_windows and windows_args or unix_args
         local res = mp.command_native({ name = "subprocess", capture_stdout = true, playback_only = false, args = args })
         if res.status ~= 0 then
             msg.error("Failed to create global_chapters_dir save directory " .. global_chapters_dir ..
-                ". Error: " .. (res.error or "unknown"))
+            ". Error: " .. (res.error or "unknown"))
             return
         end
     end
@@ -184,9 +182,7 @@ local function read_chapter_table()
             n = n:gsub("^%s*(.-)%s*$", "%1")
             l = line
             line_pos = line_pos + 1
-        else
-            return
-        end
+        else return end
         return { found_title = n, found_time = t, found_line = l }
     end)
 end
@@ -230,13 +226,13 @@ local function command_exists(command, ...)
         capture_stdout = true,
         capture_stderr = true,
         playback_only = false,
-        args = { "sh", "-c", "command -v -- " .. command }
+        args = {"sh", "-c", "command -v -- " .. command}
     })
 
     if process.status == 0 then
         local command_path = process.stdout:gsub("\n", "")
         msg.debug("command found:", command_path)
-        return { command_path, ... }
+        return {command_path, ...}
     else
         msg.debug("command not found:", command)
         return nil
@@ -259,23 +255,20 @@ local function hash(path)
     }
     local args = nil
 
-    local is_unix = package.config:sub(1, 1) == "/"
+    local is_unix = package.config:sub(1,1) == "/"
     if is_unix then
-        local md5 = command_exists("md5sum") or command_exists("md5") or
-        command_exists("openssl", "md5 | cut -d ' ' -f 2")
+        local md5 = command_exists("md5sum") or command_exists("md5") or command_exists("openssl", "md5 | cut -d ' ' -f 2")
         if md5 == nil then
             msg.warn("no md5 command found, can't generate hash")
             return
         end
         md5 = table.concat(md5, " ")
         cmd["stdin_data"] = path
-        args = { "sh", "-c", md5 .. " | cut -d ' ' -f 1 | tr '[:lower:]' '[:upper:]'" }
+        args = {"sh", "-c", md5 .. " | cut -d ' ' -f 1 | tr '[:lower:]' '[:upper:]'" }
     else --windows
         -- https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-filehash?view=powershell-7.3
-        local hash_command = "$s = [System.IO.MemoryStream]::new(); $w = [System.IO.StreamWriter]::new($s); $w.write(\"" ..
-        path ..
-        "\"); $w.Flush(); $s.Position = 0; Get-FileHash -Algorithm MD5 -InputStream $s | Select-Object -ExpandProperty Hash"
-        args = { "powershell", "-NoProfile", "-Command", hash_command }
+        local hash_command ="$s = [System.IO.MemoryStream]::new(); $w = [System.IO.StreamWriter]::new($s); $w.write(\"" .. path .. "\"); $w.Flush(); $s.Position = 0; Get-FileHash -Algorithm MD5 -InputStream $s | Select-Object -ExpandProperty Hash"
+        args = {"powershell", "-NoProfile", "-Command", hash_command}
     end
     cmd["args"] = args
     msg.debug("hash cmd:", utils.to_string(cmd))
@@ -429,10 +422,10 @@ local function input_choice(title, chapter_index)
         input.get_user_input(change_title_callback, {
             request_text = "Chapter title:",
             default_input = title,
-            cursor_pos = #title,
+            cursor_pos = #title + 1,
         }, chapter_index)
     elseif input then
-        input_title(title, #title, chapter_index)
+        input_title(title, #title + 1, chapter_index)
     end
 end
 
@@ -472,10 +465,10 @@ local function create_chapter()
     mp.set_property_native("chapter-list", all_chapters)
     mp.set_property_number("chapter", curr_chapter + 1)
     chapters_modified = true
-
+    
     if o.ask_for_title then
         local chapter_index = mp.get_property_number("chapter") + 1
-        local title = o.placeholder_title .. string.format("%02.f", chapter_index) .. " "
+        local title = o.placeholder_title .. string.format("%02.f", chapter_index)
 
         input_choice(title, chapter_index)
 
@@ -487,7 +480,7 @@ local function create_chapter()
             -- right away without requiring mouse or keyboard action
             mp.osd_message(" ", 0.1)
         end
-    end
+    end 
 end
 
 local function edit_chapter()
@@ -545,8 +538,8 @@ local function write_chapter(format, force_write)
         curr = all_chapters[i]
         local time_pos = format_time(curr.time)
         if format == "ogm" then
-            next_chapter = "CHAPTER" .. string.format("%02.f", i) .. "=" .. time_pos .. "\n" ..
-                "CHAPTER" .. string.format("%02.f", i) .. "NAME=" .. curr.title .. "\n"
+            next_chapter = "CHAPTER" .. string.format("%02.f", i) .. "=" .. time_pos .. "\n" .. 
+                           "CHAPTER" .. string.format("%02.f", i) .. "NAME=" .. curr.title .. "\n"
         elseif format == "chp" then
             next_chapter = time_pos .. " " .. curr.title .. "\n"
         else

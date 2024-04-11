@@ -1,5 +1,5 @@
 --[[
-    * track-list.lua v.2024-01-20
+    * track-list.lua v.2024-02-29
     *
     * AUTHORS: dyphire
     * License: MIT
@@ -58,10 +58,9 @@ local o = {
 opts.read_options(o)
 
 --adding the source directory to the package path and loading the module
-package.path = mp.command_native({ "expand-path", "~~/script-modules/?.lua;" }) .. package.path
+package.path = mp.command_native({"expand-path", "~~/script-modules/?.lua;"}) .. package.path
 local list = require "scroll-list"
 local list_type = nil
-local track_list = {}
 
 --modifying the list settings
 local original_open = list.open
@@ -82,9 +81,7 @@ list.selected_style = o.selected_style
 function list:format_header_string(str)
     if #list.list > 1 then
         str = str:gsub("%%(%a+)%%", { cursor = list.selected - 1, total = #list.list - 1 })
-    else
-        str = str:gsub("%[.*%]", "")
-    end
+    else str = str:gsub("%[.*%]", "") end
     return str
 end
 
@@ -106,29 +103,17 @@ end
 
 local function escape_codec(str)
     if not str or str == '' then return '' end
-    if str:find("mpeg2") then
-        return "mpeg2"
-    elseif str:find("dvvideo") then
-        return "dv"
-    elseif str:find("pcm") then
-        return "pcm"
-    elseif str:find("pgs") then
-        return "pgs"
-    elseif str:find("subrip") then
-        return "srt"
-    elseif str:find("vtt") then
-        return "vtt"
-    elseif str:find("dvd_sub") then
-        return "vob"
-    elseif str:find("dvb_sub") then
-        return "dvb"
-    elseif str:find("dvb_tele") then
-        return "teletext"
-    elseif str:find("arib") then
-        return "arib"
-    else
-        return str
-    end
+    if str:find("mpeg2") then return "mpeg2"
+    elseif str:find("dvvideo") then return "dv"
+    elseif str:find("pcm") then return "pcm"
+    elseif str:find("pgs") then return "pgs"
+    elseif str:find("subrip") then return "srt"
+    elseif str:find("vtt") then return "vtt"
+    elseif str:find("dvd_sub") then return "vob"
+    elseif str:find("dvb_sub") then return "dvb"
+    elseif str:find("dvb_tele") then return "teletext"
+    elseif str:find("arib") then return "arib"
+    else return str end
 end
 
 local function isTrackSelected(index, type)
@@ -138,7 +123,7 @@ end
 
 local function isTrackDisabled(index, type)
     return (type == "sub2" and isTrackSelected(index, "sub"))
-        or (type == "sub" and isTrackSelected(index, "sub2"))
+    or (type == "sub" and isTrackSelected(index, "sub2"))
 end
 
 local function get_track_title(track, type, filename)
@@ -166,7 +151,7 @@ local function get_track_title(track, type, filename)
     if track['demux-fps'] then h(string.format('%.5g fps', track['demux-fps'])) end
     if track['audio-channels'] then h(track['audio-channels'] .. ' ch') end
     if track['demux-samplerate'] then h(string.format('%.3g kHz', track['demux-samplerate'] / 1000)) end
-    if track['demux-bitrate'] then h(string.format('%.3g kbps', track['demux-bitrate'] / 1000)) end
+    if track['demux-bitrate'] then h(string.format('%.0f kbps', track['demux-bitrate'] / 1000)) end
     if track.lang then title = string.format('%s, %s', title, track.lang:upper()) end
     if #hints > 0 then title = string.format('%s\t[%s]', title, table.concat(hints, ', ')) end
     if track.forced then title = title .. ' Forced' end
@@ -192,20 +177,20 @@ local function updateTrackList(title, type, prop)
                     ass = "○ None"
                 }
             }
-
+        
             if isTrackSelected(nil, type) then
                 list.selected = 1
                 list[1].ass = "● None"
                 list[1].style = o.active_style
             end
-
+    
             local track_list = propNative("track-list", {})
             if not track_list then return end
             for _, track in ipairs(track_list) do
                 if track.type == track_type then
                     local title = get_track_title(track, type, filename)
                     local isDisabled = isTrackDisabled(track.id, type)
-
+        
                     local listItem = {
                         id = track.id,
                         disabled = isDisabled
@@ -223,7 +208,7 @@ local function updateTrackList(title, type, prop)
                     table.insert(list.list, listItem)
                 end
             end
-
+        
             list:update()
         end)
     end)
@@ -307,17 +292,58 @@ add_keys(o.key_reload_track, 'reload_track', reloadTrack, {})
 add_keys(o.key_remove_track, 'remove_track', removeTrack, {})
 add_keys(o.key_close_browser, 'close_browser', function() list:close() end, {})
 
-local function toggleListDelayed(type)
-    list_type = type
+function list:open()
+    if list_type == "video" then
+        video_menu = true
+        audio_menu = false
+        sub_menu = false
+        sub2_menu = false
+    elseif list_type == "audio" then
+        video_menu = false
+        audio_menu = true
+        sub_menu = false
+        sub2_menu = false
+    elseif list_type == "sub" then
+        video_menu = false
+        audio_menu = false
+        sub_menu = true
+        sub2_menu = false
+    elseif list_type == "sub2" then
+        video_menu = false
+        audio_menu = false
+        sub_menu = false
+        sub2_menu = true
+    end
+    original_open(self)
+end
+
+local function toggleListDelayed()
     mp.add_timeout(0.1, function()
         list:toggle()
     end)
 end
 
+local function toggleList(type)
+    list_type = type
+    if type == "video" then
+        if video_menu then video_menu = false
+        else toggleListDelayed() end
+    elseif type == "audio" then
+        if audio_menu then audio_menu = false
+        else toggleListDelayed() end
+    elseif type == "sub" then
+        if sub_menu then sub_menu = false
+        else toggleListDelayed() end
+    elseif type == "sub2" then
+        if sub2_menu then sub2_menu = false
+        else toggleListDelayed() end
+    end
+end
+
 local function openTrackList(title, type, prop)
     list:close()
     updateTrackList(title, type, prop)
-    toggleListDelayed(type)
+    toggleList(type)
 end
 
 mp.register_script_message("toggle-vidtrack-browser", function()

@@ -8,7 +8,6 @@
 ]]
 
 local msg = require 'mp.msg'
-local input = require 'mp.input'
 local opts = require("mp.options")
 
 local o = {
@@ -56,9 +55,12 @@ local reset_curr = true
 local paused = false
 
 --adding the source directory to the package path and loading the module
-package.path = mp.command_native({ "expand-path", "~~/script-modules/?.lua;" }) .. package.path
+package.path = mp.command_native({"expand-path", "~~/script-modules/?.lua;"}) .. package.path
 local list = require "scroll-list"
-if not input then
+
+local success, input = pcall(require, 'mp.input')
+if not success then
+    -- Requires: https://github.com/CogentRedTester/mpv-user-input
     user_input_module, input = pcall(require, "user-input-module")
 end
 
@@ -81,9 +83,7 @@ list.selected_style = o.selected_style
 function list:format_header_string(str)
     if #list.list > 0 then
         str = str:gsub("%%(%a+)%%", { cursor = list.selected, total = #list.list })
-    else
-        str = str:gsub("%[.*%]", "")
-    end
+    else str = str:gsub("%[.*%]", "") end
     return str
 end
 
@@ -122,11 +122,8 @@ function chapter_list(curr_chapter)
         if o.max_title_length > 0 and title:len() > o.max_title_length + 5 then
             title = utf8_sub(title, 1, o.max_title_length) .. "..."
         end
-        if time < 0 then
-            time = 0
-        else
-            time = math.floor(time)
-        end
+        if time < 0 then time = 0
+        else time = math.floor(time) end
         item.ass = string.format("[%02d:%02d:%02d]", math.floor(time / 60 / 60), math.floor(time / 60) % 60, time % 60)
         item.ass = item.ass .. '\\h\\h\\h' .. list.ass_escape(title)
         list.list[i] = item
@@ -200,10 +197,10 @@ local function edit_chapter()
         input.get_user_input(change_title_callback, {
             request_text = "Chapter title:",
             default_input = title,
-            cursor_pos = #title,
+            cursor_pos = #title + 1,
         }, chapter_index + 1)
     elseif input then
-        input_title(title, #title, chapter_index + 1)
+        input_title(title, #title + 1, chapter_index + 1)
     end
 
     if o.pause_on_input then
