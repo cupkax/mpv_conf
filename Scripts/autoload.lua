@@ -58,34 +58,34 @@ options.read_options(o, nil, function(list)
     end
 end)
 
-function Set(t)
+function Set (t)
     local set = {}
     for _, v in pairs(t) do set[v] = true end
     return set
 end
 
-function SetUnion(a, b)
+function SetUnion (a,b)
     for k in pairs(b) do a[k] = true end
     return a
 end
 
-function Split(s)
+function Split (s)
     local set = {}
     for v in string.gmatch(s, '([^,]+)') do set[v] = true end
     return set
 end
 
-EXTENSIONS_VIDEO = Set {
+EXTENSIONS_VIDEO_DEFAULT = Set {
     '3g2', '3gp', 'avi', 'flv', 'm2ts', 'm4v', 'mj2', 'mkv', 'mov',
     'mp4', 'mpeg', 'mpg', 'ogv', 'rmvb', 'webm', 'wmv', 'y4m'
 }
 
-EXTENSIONS_AUDIO = Set {
+EXTENSIONS_AUDIO_DEFAULT = Set {
     'aiff', 'ape', 'au', 'flac', 'm4a', 'mka', 'mp3', 'oga', 'ogg',
     'ogm', 'opus', 'wav', 'wma'
 }
 
-EXTENSIONS_IMAGES = Set {
+EXTENSIONS_IMAGES_DEFAULT = Set {
     'avif', 'bmp', 'gif', 'j2k', 'jp2', 'jpeg', 'jpg', 'jxl', 'png',
     'svg', 'tga', 'tif', 'tiff', 'webp'
 }
@@ -95,16 +95,26 @@ function split_option_exts(video, audio, image)
     if audio then o.additional_audio_exts = Split(o.additional_audio_exts) end
     if image then o.additional_image_exts = Split(o.additional_image_exts) end
 end
-
 split_option_exts(true, true, true)
 
 function create_extensions()
     EXTENSIONS = {}
-    if o.videos then SetUnion(SetUnion(EXTENSIONS, EXTENSIONS_VIDEO), o.additional_video_exts) end
-    if o.audio then SetUnion(SetUnion(EXTENSIONS, EXTENSIONS_AUDIO), o.additional_audio_exts) end
-    if o.images then SetUnion(SetUnion(EXTENSIONS, EXTENSIONS_IMAGES), o.additional_image_exts) end
+    EXTENSIONS_VIDEO = {}
+    EXTENSIONS_AUDIO = {}
+    EXTENSIONS_IMAGES = {}
+    if o.videos then
+        SetUnion(SetUnion(EXTENSIONS_VIDEO, EXTENSIONS_VIDEO_DEFAULT), o.additional_video_exts)
+        SetUnion(EXTENSIONS, EXTENSIONS_VIDEO)
+    end
+    if o.audio then
+        SetUnion(SetUnion(EXTENSIONS_AUDIO, EXTENSIONS_AUDIO_DEFAULT), o.additional_audio_exts)
+        SetUnion(EXTENSIONS, EXTENSIONS_AUDIO)
+    end
+    if o.images then
+        SetUnion(SetUnion(EXTENSIONS_IMAGES, EXTENSIONS_IMAGES_DEFAULT), o.additional_image_exts)
+        SetUnion(EXTENSIONS, EXTENSIONS_IMAGES)
+    end
 end
-
 create_extensions()
 
 function validate_directory_mode()
@@ -112,7 +122,6 @@ function validate_directory_mode()
         o.directory_mode = nil
     end
 end
-
 validate_directory_mode()
 
 function add_files(files)
@@ -124,7 +133,7 @@ function add_files(files)
 end
 
 function get_extension(path)
-    match = string.match(path, "%.([^%.]+)$")
+    match = string.match(path, "%.([^%.]+)$" )
     if match == nil then
         return "nomatch"
     else
@@ -187,20 +196,12 @@ function jaro(s1, s2)
         local final = math.min(i + match_window + 1, #s2)
 
         for k = start, final, 1 do
-            if matches2[k] then
-                goto continue
+            if not (matches2[k] or s1[i] ~= s2[k]) then
+                matches1[i] = true
+                matches2[k] = true
+                m = m + 1
+                break
             end
-
-            if s1[i] ~= s2[k] then
-                goto continue
-            end
-
-            matches1[i] = true
-            matches2[k] = true
-            m = m + 1
-            break
-
-            ::continue::
         end
     end
 
@@ -210,21 +211,17 @@ function jaro(s1, s2)
 
     local k = 0
     for i = 0, #s1, 1 do
-        if (not matches1[i]) then
-            goto continue
-        end
+        if matches1[i] then
+            while not matches2[k] do
+                k = k + 1
+            end
 
-        while not matches2[k] do
+            if s1[i] ~= s2[k] then
+                t = t + 1
+            end
+
             k = k + 1
         end
-
-        if s1[i] ~= s2[k] then
-            t = t + 1
-        end
-
-        k = k + 1
-
-        ::continue::
     end
 
     t = t / 2.0
@@ -310,7 +307,7 @@ if is_windows then
         }
 
         -- ffi code from https://github.com/po5/thumbfast, Mozilla Public License Version 2.0
-        ffi.cdef [[
+        ffi.cdef[[
             int __stdcall MultiByteToWideChar(unsigned int CodePage, unsigned long dwFlags, const char *lpMultiByteStr,
             int cbMultiByte, wchar_t *lpWideCharStr, int cchWideChar);
             int __stdcall StrCmpLogicalW(wchar_t *psz1, wchar_t *psz2);
@@ -355,7 +352,7 @@ function alphanumsort_lua(filenames)
 
     local tuples = {}
     for i, f in ipairs(filenames) do
-        tuples[i] = { f:lower():gsub("0*(%d+)%.?(%d*)", padnum), f }
+        tuples[i] = {f:lower():gsub("0*(%d+)%.?(%d*)", padnum), f}
     end
     table.sort(tuples, function(a, b)
         return a[1] == b[1] and #b[2] < #a[2] or a[1] < b[1]
@@ -385,7 +382,7 @@ function scan_dir(path, current_file, dir_mode, separator, dir_depth, total_file
     local files = utils.readdir(path, "files") or {}
     local dirs = dir_mode ~= "ignore" and utils.readdir(path, "dirs") or {}
     local prefix = path == "." and "" or path
-    table.filter(files, function(v)
+    table.filter(files, function (v)
         -- The current file could be a hidden file, ignoring it doesn't load other
         -- files from the current directory.
         if (o.ignore_hidden and not (prefix .. v == current_file) and string.match(v, "^%.")) then
@@ -422,7 +419,7 @@ function scan_dir(path, current_file, dir_mode, separator, dir_depth, total_file
     if dir_mode == "recursive" then
         for _, dir in ipairs(dirs) do
             scan_dir(prefix .. dir .. separator, current_file, dir_mode,
-                separator, dir_depth + 1, total_files, extensions)
+                     separator, dir_depth + 1, total_files, extensions)
         end
     else
         for i, dir in ipairs(dirs) do
@@ -448,7 +445,7 @@ function find_and_add_entries()
     this_ext = get_extension(filename)
     -- check if this is a manually made playlist
     if (pl_count > 1 and autoloaded == nil) or
-        (pl_count == 1 and EXTENSIONS[string.lower(this_ext)] == nil) then
+       (pl_count == 1 and EXTENSIONS[string.lower(this_ext)] == nil) then
         msg.debug("stopping: manually made playlist")
         return
     else
@@ -500,7 +497,7 @@ function find_and_add_entries()
     if current == nil then
         return
     end
-    msg.trace("current file position in files: " .. current)
+    msg.trace("current file position in files: "..current)
 
     -- treat already existing playlist entries, independent of how they got added
     -- as if they got added by autoload
@@ -508,7 +505,7 @@ function find_and_add_entries()
         added_entries[entry.filename] = true
     end
 
-    local append = { [-1] = {}, [1] = {} }
+    local append = {[-1] = {}, [1] = {}}
     for direction = -1, 1, 2 do -- 2 iterations, with direction = -1 and +1
         for i = 1, MAXENTRIES do
             local pos = current + i * direction
@@ -521,11 +518,11 @@ function find_and_add_entries()
             if not added_entries[file] then
                 if direction == -1 then
                     msg.verbose("Prepending " .. file)
-                    table.insert(append[-1], 1, { file, pl_current + i * direction + 1 })
+                    table.insert(append[-1], 1, {file, pl_current + i * direction + 1})
                 else
                     msg.verbose("Adding " .. file)
                     if pl_count > 1 then
-                        table.insert(append[1], { file, pl_current + i * direction - 1 })
+                        table.insert(append[1], {file, pl_current + i * direction - 1})
                     else
                         mp.commandv("loadfile", file, "append")
                     end

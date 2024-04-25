@@ -3,14 +3,14 @@
 -- link: https://github.com/dyphire/mpv-scripts
 
 --[[
-The script calls up a window in mpv to quickly load the folder/files/url/iso/clipboard/other subtitles/other audio tracks/other video tracks.
+The script calls up a window in mpv to quickly load the folder/files/iso/clipboard (support url)/other subtitles/other audio tracks/other video tracks.
 Usage, add bindings to input.conf:
 key        script-message-to open_dialog import_folder
-key        script-message-to open_dialog import_url
 key        script-message-to open_dialog import_files
-key        script-message-to open_dialog import_files <type>  # vid, aid, sid (video/audio/subtitle track)
+key        script-message-to open_dialog import_files <type>      # vid, aid, sid (video/audio/subtitle track)
 key        script-message-to open_dialog import_clipboard
 key        script-message-to open_dialog import_clipboard <type>  # vid, aid, sid (video/audio/subtitle track)
+key        script-message-to open_dialog set_clipboard <text>     # text can be mpv properties as ${path}
 ]]--
 
 local msg = require 'mp.msg'
@@ -45,6 +45,21 @@ local file_types = {
     playlist = table.concat(split(o.playlist_types), ';'),
 }
 
+local powershell = nil
+
+local function pwsh_check()
+    local arg = {"cmd", "/c", "pwsh", "--version"}
+    local res = mp.command_native({name = "subprocess", capture_stdout = true, playback_only = false, args = arg})
+    if res.status ~= 0 or res.stdout:match("^PowerShell") == nil then
+        powershell = "powershell"
+    else
+        powershell = "pwsh"
+    end
+end
+
+-- https://github.com/mpv-player/mpv/blob/master/etc/mpv-icon-8bit-16x16.png
+local mpv_icon_base64 = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAACvklEQVQ4y3WTSWhUWRSGv/MmU1UpwYSoFbs0VXFo7IhTowgaJGrEhbYLFw44LNqFjWD3Og3dLsSFLlwILgRbXShuXPRCEcUhEUQRIyZROnGImipRkjhVXr2q9+69LrpSiMOBs7nn8t9z7v8d4esQwKqkVM4MoCtpvrz8edhL61obG+KTf3fEaReRZkFcbfRAaKKLw/6bI7dHO/OA+paAuza1YWvcTRwVpPYbnWEwBT8c23vp1b9ngBDArtSc9tT67bVu8h9BPICmWRl+Xr2YzNwMumx4P/oOQTzP9jam401PnxT6ewEtgCyZtHz2tGT6niDxmpoYew79yoK2FrTWKKXQWtN9tZcTf56mFAQYjJ/7+HLRnbc3+y3ArY817BMkDrDn8G4WtLVw8q+zvBkaRmuN1pp5rT+y8++tlbklXh9r2Ae4FjDBs712gMzsLPNXzkUpxcDdJxz57RgXTl4h8EsopfhpxRx+yKQB8GxvDeBZgGuJ1QQwc1G2+mIYhRT9IhdPXWL/joN0dz1AKcWMef8LWGJlAM+p+B0CtjGmKhCUivgln6BcxC5bRGGE1hqjqxiEgOUARhmVd8TJPu5+Wv20QlBAmYg1m1exdlsbtmujtWaw9wUAyqg8YBwgKoZ+V9KbmB3sf8b9a320rJjDzIXNbNr7C/VTJ1W76rnxiPxgDoBi6HcBkQ1YEsnrKYnUFkGcns4+UtkU63atJpaoqVrZd/M/zh08j1IKgwkejfT+8TYaGZIKTHXL6lfuTiUaD4wPmG6ezoyWNNponve8JPdsqErkq7F8x62R68eB0XGUJwBTlta17misndYhSM13UA7yhdyB26Odp4HXQGkcZQ2Uc8XnA37gX4u5cXEsJ2mJFQNUpKOhD+X3F/pGHnQ8LNy/DAwDpS+XSQAPSAITgQTgfmbZGPAB+AiUx9f6E25gOc5E3m0HAAAAAElFTkSuQmCC"
+
 -- open bluray iso or dir
 local function open_bluray(path)
     mp.set_property('bluray-device', path)
@@ -58,7 +73,7 @@ local function open_dvd(path)
 end
 
 -- open folder
-local function open_folder(path)
+local function open_folder(path, i)
     local fpath, dir = utils.split_path(path)
     if utils.file_info(utils.join_path(path, "BDMV")) then
         open_bluray(path)
@@ -69,7 +84,7 @@ local function open_folder(path)
     elseif dir:upper() == "VIDEO_TS" then
         open_dvd(fpath)
     else
-        mp.commandv('loadfile', path)
+        mp.commandv('loadfile', path, i == 1 and 'replace' or 'append')
     end
 end
 
@@ -96,57 +111,53 @@ end
 
 -- import folder
 local function import_folder()
+    if not powershell then pwsh_check() end
     local was_ontop = mp.get_property_native("ontop")
     if was_ontop then mp.set_property_native("ontop", false) end
-    local powershell_script = [[
+    local powershell_script = string.format([[
+        Add-Type -AssemblyName System.Windows.Forms
         $u8 = [System.Text.Encoding]::UTF8
         $out = [Console]::OpenStandardOutput()
-        $AssemblyFullName = 'System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'
-        $Assembly = [System.Reflection.Assembly]::Load($AssemblyFullName)
-        $OpenFileDialog = New-Object System.Windows.Forms.OpenFileDialog
-        $OpenFileDialog.AddExtension = $false
-        $OpenFileDialog.CheckFileExists = $false
-        $OpenFileDialog.DereferenceLinks = $true
-        $OpenFileDialog.Filter = "Folders|`n"
-        $OpenFileDialog.Multiselect = $false
-        $OpenFileDialogType = $OpenFileDialog.GetType()
-        $FileDialogInterfaceType = $Assembly.GetType('System.Windows.Forms.FileDialogNative+IFileDialog')
-        $IFileDialog = $OpenFileDialogType.GetMethod('CreateVistaDialog',@('NonPublic','Public','Static','Instance')).Invoke($OpenFileDialog,$null)
-        $null = $OpenFileDialogType.GetMethod('OnBeforeVistaDialog',@('NonPublic','Public','Static','Instance')).Invoke($OpenFileDialog,$IFileDialog)
-        [uint32]$PickFoldersOption = $Assembly.GetType('System.Windows.Forms.FileDialogNative+FOS').GetField('FOS_PICKFOLDERS').GetValue($null)
-        $FolderOptions = $OpenFileDialogType.GetMethod('get_Options',@('NonPublic','Public','Static','Instance')).Invoke($OpenFileDialog,$null) -bor $PickFoldersOption
-        $null = $FileDialogInterfaceType.GetMethod('SetOptions',@('NonPublic','Public','Static','Instance')).Invoke($IFileDialog,$FolderOptions)
-        $VistaDialogEvent = [System.Activator]::CreateInstance($AssemblyFullName,'System.Windows.Forms.FileDialog+VistaDialogEvents',$false,0,$null,$OpenFileDialog,$null,$null).Unwrap()
-        [uint32]$AdviceCookie = 0
-        $AdvisoryParameters = @($VistaDialogEvent,$AdviceCookie)
-        $AdviseResult = $FileDialogInterfaceType.GetMethod('Advise',@('NonPublic','Public','Static','Instance')).Invoke($IFileDialog,$AdvisoryParameters)
-        $AdviceCookie = $AdvisoryParameters[1]
-        $Result = $FileDialogInterfaceType.GetMethod('Show',@('NonPublic','Public','Static','Instance')).Invoke($IFileDialog,[System.IntPtr]::Zero)
-        $null = $FileDialogInterfaceType.GetMethod('Unadvise',@('NonPublic','Public','Static','Instance')).Invoke($IFileDialog,$AdviceCookie)
-        If (($Result -eq 0) -or ($Result -eq [System.Windows.Forms.DialogResult]::OK)) {
-            $u8filename = $u8.GetBytes("$($OpenFileDialog.FileName)`n")
-            $out.Write($u8filename, 0, $u8filename.Length)
+        $TopForm = New-Object System.Windows.Forms.Form
+        $TopForm.TopMost = $true
+        $TopForm.ShowInTaskbar = $false
+        $TopForm.Visible = $false
+        $IconBytes = [Convert]::FromBase64String("%s")
+        $IconStream = New-Object IO.MemoryStream($IconBytes, 0, $IconBytes.Length)
+        $IconStream.Write($IconBytes, 0, $IconBytes.Length);
+        $TopForm.Icon = [System.Drawing.Icon]::FromHandle((New-Object System.Drawing.Bitmap -Argument $IconStream).GetHIcon())
+        $folderBrowser = New-Object -TypeName System.Windows.Forms.FolderBrowserDialog
+        $folderBrowser.RootFolder = "Desktop"
+        $folderBrowser.ShowNewFolderButton = $true
+        $folderBrowser.Owner = $TopForm
+        $result = $folderBrowser.ShowDialog($TopForm)
+        if ($result -eq "OK") {
+            $selectedFolder = $folderBrowser.SelectedPath
+            $u8selectedFolder = $u8.GetBytes("$selectedFolder`n")
+            $out.Write($u8selectedFolder, 0, $u8selectedFolder.Length)
         }
-    ]]
+        $TopForm.Dispose()
+    ]], mpv_icon_base64)
 
     local res = mp.command_native({
         name = 'subprocess',
         playback_only = false,
         capture_stdout = true,
-        args = {'powershell', '-NoProfile', '-Command', powershell_script},
+        args = { powershell, '-NoProfile', '-Command', powershell_script },
     })
 
     if was_ontop then mp.set_property_native("ontop", true) end
     if (res.status ~= 0) then
         mp.osd_message("Failed to open folder dialog.")
     elseif res.stdout and res.stdout ~= "" then
-        local folder_path = res.stdout:match("(.-)\n?$") -- Trim any trailing newline
-        open_folder(folder_path)
+        local folder_path = res.stdout:match("(.-)[\r\n]?$") -- Trim any trailing newline
+        open_folder(folder_path, 1)
     end
 end
 
 -- import files
 local function import_files(type)
+    if not powershell then pwsh_check() end
     local filter = ''
     local was_ontop = mp.get_property_native("ontop")
     if was_ontop then mp.set_property_native("ontop", false) end
@@ -166,58 +177,41 @@ local function import_files(type)
         name = 'subprocess',
         playback_only = false,
         capture_stdout = true,
-        args = { 'powershell', '-NoProfile', '-Command', string.format([[& {
+        args = { powershell, '-NoProfile', '-Command', string.format([[& {
             Trap {
                 Write-Error -ErrorRecord $_
                 Exit 1
             }
-            Add-Type -AssemblyName PresentationFramework
+            Add-Type -AssemblyName System.Windows.Forms
             $u8 = [System.Text.Encoding]::UTF8
             $out = [Console]::OpenStandardOutput()
-            $ofd = New-Object -TypeName Microsoft.Win32.OpenFileDialog
+            $TopForm = New-Object System.Windows.Forms.Form
+            $TopForm.TopMost = $true
+            $TopForm.ShowInTaskbar = $false
+            $TopForm.Visible = $false
+            $IconBytes = [Convert]::FromBase64String("%s")
+            $IconStream = New-Object IO.MemoryStream($IconBytes, 0, $IconBytes.Length)
+            $IconStream.Write($IconBytes, 0, $IconBytes.Length);
+            $TopForm.Icon = [System.Drawing.Icon]::FromHandle((New-Object System.Drawing.Bitmap -Argument $IconStream).GetHIcon())
+            $ofd = New-Object System.Windows.Forms.OpenFileDialog
             $ofd.Multiselect = $true
             $ofd.Filter = "%s"
-            If ($ofd.ShowDialog() -eq $true) {
+            If ($ofd.ShowDialog($TopForm) -eq $true) {
                 ForEach ($filename in $ofd.FileNames) {
                     $u8filename = $u8.GetBytes("$filename`n")
                     $out.Write($u8filename, 0, $u8filename.Length)
                 }
             }
-        }]], filter) }
+            $TopForm.Dispose()
+        }]], mpv_icon_base64, filter) }
     })
     if was_ontop then mp.set_property_native("ontop", true) end
     if (res.status ~= 0) then return end
     local i = 0
-    for path in string.gmatch(res.stdout, '[^\n]+') do
+    for path in string.gmatch(res.stdout, '[^\r\n]+') do
         i = i + 1
         open_files(path, type, i, false)
     end
-end
-
--- open url
-local function import_url()
-    local was_ontop = mp.get_property_native("ontop")
-    if was_ontop then mp.set_property_native("ontop", false) end
-    local res = mp.command_native({
-        name = 'subprocess',
-        playback_only = false,
-        capture_stdout = true,
-        args = { 'powershell', '-NoProfile', '-Command', [[& {
-            Trap {
-                Write-Error -ErrorRecord $_
-                Exit 1
-            }
-            Add-Type -AssemblyName Microsoft.VisualBasic
-            $u8 = [System.Text.Encoding]::UTF8
-            $out = [Console]::OpenStandardOutput()
-            $urlname = [Microsoft.VisualBasic.Interaction]::InputBox("Address", "Open", "https://")
-            $u8urlname = $u8.GetBytes("$urlname")
-            $out.Write($u8urlname, 0, $u8urlname.Length)
-        }]]    }
-    })
-    if was_ontop then mp.set_property_native("ontop", true) end
-    if (res.status ~= 0) then return end
-    mp.commandv('loadfile', res.stdout)
 end
 
 -- Returns a string of UTF-8 text from the clipboard
@@ -231,16 +225,10 @@ local function get_clipboard()
                 Write-Error -ErrorRecord $_
                 Exit 1
             }
-    
-            $clip = ""
-            if (Get-Command "Get-Clipboard" -errorAction SilentlyContinue) {
-                $clip = Get-Clipboard -Raw -Format Text -TextFormatType UnicodeText
-            } else {
-                Add-Type -AssemblyName PresentationCore
-                $clip = [Windows.Clipboard]::GetText()
+            $clip = Get-Clipboard -Raw -Format Text -TextFormatType UnicodeText
+            if (-not $clip) {
+                $clip = Get-Clipboard -Raw -Format FileDropList
             }
-    
-            $clip = $clip -Replace "`r",""
             $u8clip = [System.Text.Encoding]::UTF8.GetBytes($clip)
             [Console]::OpenStandardOutput().Write($u8clip, 0, $u8clip.Length)
         }]] }
@@ -251,25 +239,35 @@ local function get_clipboard()
     return ''
 end
 
--- open for clipboard
-local function import_clipboard(type)
-    local clip = get_clipboard():gsub("^[\'\"]", ""):gsub("[\'\"]$", "")
-    if clip ~= '' then
-        if clip:find('^%a[%w.+-]-://') then
-            mp.commandv('loadfile', clip)
+-- open files from clipboard
+local function open_clipboard(path, type, i)
+    local path = path:gsub("^[\'\"]", ""):gsub("[\'\"]$", ""):gsub('^%s+', ''):gsub('%s+$', '')
+    if path:find('^%a[%w.+-]-://') then
+        mp.commandv('loadfile', path, 'append')
+    else
+        local meta = utils.file_info(path)
+        if not meta then
+            mp.osd_message('Clipboard path is invalid')
+            msg.warn('Clipboard path is invalid')
+        elseif meta.is_dir then
+            open_folder(path, i)
+        elseif meta.is_file then
+            open_files(path, type, i, true)
         else
-            local meta = utils.file_info(clip)
-            if not meta then
-                mp.osd_message('Clipboard is not a valid URL or file path')
-                msg.warn('Clipboard is not a valid URL or file path')
-            elseif meta.is_dir then
-                open_folder(clip)
-            elseif meta.is_file then
-                open_files(clip, type, 1, true)
-            else
-                mp.osd_message('Clipboard is not a valid URL or file path')
-                msg.warn('Clipboard is not a valid URL or file path')
-            end
+            mp.osd_message('Clipboard path is invalid')
+            msg.warn('Clipboard path is invalid')
+        end
+    end
+end
+
+-- import clipboard
+local function import_clipboard(type)
+    local clip = get_clipboard()
+    if clip ~= '' then
+        local i = 0
+        for path in string.gmatch(clip, '[^\r\n]+') do
+            i = i + 1
+            open_clipboard(path, type, i)
         end
     else
         mp.osd_message('Clipboard is empty')
@@ -277,6 +275,16 @@ local function import_clipboard(type)
     end
 end
 
+-- escapes a string so that it can be inserted into powershell as a string literal
+local function escape_powershell(str)
+    return '"'..string.gsub(str, '[$"`]', '`%1')..'"'
+end
+
+-- sets the contents of the clipboard to the given string
+local function set_clipboard(text)
+    msg.verbose('setting clipboard text:', text)
+    mp.commandv('run', 'powershell', '-NoProfile', '-command', 'set-clipboard', escape_powershell(text))
+end
 
 local function end_file(event)
     mp.unregister_event(end_file)
@@ -297,5 +305,5 @@ mp.register_event("end-file", end_file)
 
 mp.register_script_message('import_folder', import_folder)
 mp.register_script_message('import_files', import_files)
-mp.register_script_message('import_url', import_url)
 mp.register_script_message('import_clipboard', import_clipboard)
+mp.register_script_message('set_clipboard', set_clipboard)

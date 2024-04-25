@@ -3,7 +3,7 @@
     Available at: https://github.com/CogentRedTester/mpv-clipboard
 
     `script-message set-clipboard <text>`
-
+        
         saves the given string in the clipboard
 
     `script-message get-clipboard <script-message>`
@@ -36,6 +36,15 @@ end
 
 local platform = detect_platform()
 
+local function make_raw(s)
+	if not s then return end
+	s = string.gsub(s, '^[\'\"]', '')
+	s = string.gsub(s, '[\'\"]$', '')
+	s = string.gsub(s, '^%s+', '')
+	s = string.gsub(s, '%s+$', '')
+	return s
+end
+
 -- this is based on mpv-copyTime:
 -- https://github.com/Arieleg/mpv-copyTime/blob/master/copyTime.lua
 local function get_command()
@@ -54,7 +63,7 @@ end
 local function co_resume_err(...)
     local success, err = coroutine.resume(...)
     if not success then
-        msg.warn(debug.traceback((select(1, ...))))
+        msg.warn(debug.traceback( (select(1, ...)) ))
         msg.error(err)
     end
     return success
@@ -68,7 +77,7 @@ end
 
 -- escapes a string so that it can be inserted into powershell as a string literal
 local function escape_powershell(str)
-    return '"' .. string.gsub(str, '[$"`]', '`%1') .. '"'
+    return '"'..string.gsub(str, '[$"`]', '`%1')..'"'
 end
 
 -- runs the given command.
@@ -112,22 +121,16 @@ local function get_clipboard()
         end
     elseif platform == 'windows' then
         local res = subprocess({ 'powershell', '-NoProfile', '-Command', [[& {
-                Trap {
-                    Write-Error -ErrorRecord $_
-                    Exit 1
-                }
-
-                $clip = ""
-                if (Get-Command "Get-Clipboard" -errorAction SilentlyContinue) {
-                    $clip = Get-Clipboard -Raw -Format Text -TextFormatType UnicodeText
-                } else {
-                    Add-Type -AssemblyName PresentationCore
-                    $clip = [Windows.Clipboard]::GetText()
-                }
-
-                $clip = $clip -Replace "`r",""
-                $u8clip = [System.Text.Encoding]::UTF8.GetBytes($clip)
-                [Console]::OpenStandardOutput().Write($u8clip, 0, $u8clip.Length)
+            Trap {
+                Write-Error -ErrorRecord $_
+                Exit 1
+            }
+            $clip = Get-Clipboard -Raw -Format Text -TextFormatType UnicodeText
+            if (-not $clip) {
+                $clip = Get-Clipboard -Raw -Format FileDropList
+            }
+            $u8clip = [System.Text.Encoding]::UTF8.GetBytes($clip)
+            [Console]::OpenStandardOutput().Write($u8clip, 0, $u8clip.Length)
             }]]
         })
         if not res.error then
@@ -144,7 +147,7 @@ end
 
 local function substitute(str, clip)
     return string.gsub(str, '%b%%', function(text)
-        if text == '%clip%' then return clip end
+        if text == '%clip%' then return make_raw(clip) end
         if text == '%%' then return '%' end
     end)
 end
@@ -156,8 +159,8 @@ local function set_clipboard(text)
     if platform == 'windows' then
         mp.commandv('run', 'powershell', '-NoProfile', '-command', 'set-clipboard', escape_powershell(text))
 
-        -- this is based on mpv-copyTime:
-        -- https://github.com/Arieleg/mpv-copyTime/blob/master/copyTime.lua
+    -- this is based on mpv-copyTime:
+    -- https://github.com/Arieleg/mpv-copyTime/blob/master/copyTime.lua
     else
         local pipe = io.popen(get_command(), 'w')
         if not pipe then return msg.error('could not open unix pipe') end
@@ -170,7 +173,7 @@ end
 local function clipboard_command(...)
     msg.verbose('received clipboard command:', ...)
 
-    local args = { 'osd-auto', ... }
+    local args = {'osd-auto', ...}
     local function command()
         local clip = get_clipboard()
         for i, str in ipairs(args) do
@@ -181,11 +184,8 @@ local function clipboard_command(...)
 
     -- if the first command prefix is sync then run synchronously, otherwise run
     -- in a corooutine which allows the get_clipboard command to yield.
-    if select(1, ...) == 'sync' then
-        xpcall(command, error_handler)
-    else
-        co_run(command)
-    end
+    if select(1, ...) == 'sync' then xpcall(command, error_handler)
+    else co_run(command) end
 end
 
 -- sends the contents of the clipboard to any script that requests it
