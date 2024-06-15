@@ -39,8 +39,7 @@
         script-message cycle-commands/osd 'apply-profile profile1' 'apply-profile profile2'
 
     Any osd messages printed by the command will override the message sent by cycle-commands/osd.
-]]
-   --
+]]--
 
 local mp = require 'mp'
 local msg = require 'mp.msg'
@@ -50,7 +49,7 @@ local iterators = {}
 
 --main function to identify and run the cycles
 local function main(osd, ...)
-    local commands = { ... }
+    local commands = {...}
 
     local reverse = commands[1] == '!reverse'
     if reverse then table.remove(commands, 1) end
@@ -71,7 +70,7 @@ local function main(osd, ...)
 
     --mp.command should run the commands exactly as if they were entered in input.conf.
     --This should provide universal support for all input.conf command syntax
-    local cmd = commands[iterators[str]]
+    local cmd = commands[ iterators[str] ]
     msg.verbose('sending command:', cmd)
     if osd then mp.osd_message(cmd) end
     mp.command(cmd)

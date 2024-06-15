@@ -12,6 +12,7 @@ local o = {
 options.read_options(o, _, function() end)
 
 local path = mp.command_native({ "expand-path", o.path })
+local is_windows = package.config:sub(1, 1) == "\\" -- detect path separator, windows uses backslashes
 
 local menu = {
     type = 'recent_menu',
@@ -314,8 +315,8 @@ function on_load()
     if not o.enabled then return end
     local path = mp.get_property("path")
     if not path then return end
-    if path:match("bd://") or path:match("dvd://")  or path:match("dvb://") or path:match("cdda://") then return end
-    if not is_protocol(path) then path = path:gsub("\\", "/") end
+    if path:match("bd://") or path:match("dvd://") or path:match("dvb://") or path:match("cdda://") then return end
+    if not is_protocol(path) and is_windows then path = path:gsub("/", "\\") end
     local filename = mp.get_property("filename")
     local dir, filename_without_ext, ext = split_path(filename)
     local title = mp.get_property("media-title") or path

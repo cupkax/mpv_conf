@@ -15,6 +15,10 @@ COMMIT_26 Mar 2023_2ba3e26
 --[[
     Configuration:
 
+    # enabled
+
+    Determines whether the script is enabled or not
+
     # max_search_depth
     
     Determines the max depth of recursive search, should be >= 1
@@ -51,16 +55,17 @@ local utils = require 'mp.utils'
 local options = require 'mp.options'
 
 o = {
+    enabled = true,
     max_search_depth = 1,
     discovery_threshold = 10,
     excluded_dir = [[
         []
     ]],
 }
-options.read_options(o)
+options.read_options(o, _, function() end)
 
 ----------
-
+local is_windows = package.config:sub(1, 1) == "\\" -- detect path separator, windows uses backslashes
 excluded_dir = utils.parse_json(o.excluded_dir)
 
 local default_audio_paths = mp.get_property_native("options/audio-file-paths")
@@ -262,10 +267,12 @@ function explode(raw_paths, search_path, cache)
 end
 
 function explode_all()
+    if not o.enabled then return end
     msg.debug("max_search_depth = ".. o.max_search_depth .. ", discovery_threshold = " .. o.discovery_threshold)
 
     local video_path = mp.get_property("path")
-    local search_path, _ = utils.split_path(video_path):gsub("\\", "/")
+    local search_path, _ = utils.split_path(video_path)
+    if is_windows then search_path = search_path:gsub("\\", "/") end
     msg.debug("search_path = " .. search_path)
 
     local cache = {}

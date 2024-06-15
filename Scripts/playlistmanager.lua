@@ -455,7 +455,7 @@ function stripfilename(pathfile, media_title)
         end
     end
     if settings.slice_longfilenames and tmp:len() > settings.slice_longfilenames_amount + 5 then
-        tmp = utf8_sub(tmp, 1, settings.slice_longfilenames_amount) .. " ..."
+        tmp = utf8_sub(tmp, 1, settings.slice_longfilenames_amount) .. " ..." 
     end
     return tmp
 end
@@ -743,10 +743,8 @@ function removefile()
     refresh_globals()
     if plen == 0 then return end
     selection = nil
-    if cursor == pos then
-        mp.command(
-            "script-message unseenplaylist mark true \"playlistmanager avoid conflict when removing file\"")
-    end
+    if cursor == pos then mp.command(
+        "script-message unseenplaylist mark true \"playlistmanager avoid conflict when removing file\"") end
     mp.commandv("playlist-remove", cursor)
     if cursor == plen - 1 then cursor = cursor - 1 end
     if plen == 1 then
@@ -1057,7 +1055,7 @@ end
 -- see https://learn.microsoft.com/en-us/windows/win32/api/shlwapi/nf-shlwapi-strcmplogicalw
 -- this function was taken from https://github.com/mpvnet-player/mpv.net/issues/575#issuecomment-1817413401
 local winapi = {}
-local is_windows = package.config:sub(1, 1) == "\\"
+local is_windows = package.config:sub(1,1) == "\\"
 
 if is_windows then
     -- is_ffi_loaded is false usually means the mpv builds without luajit
@@ -1072,7 +1070,7 @@ if is_windows then
         }
 
         -- ffi code from https://github.com/po5/thumbfast, Mozilla Public License Version 2.0
-        ffi.cdef [[
+        ffi.cdef[[
             int __stdcall MultiByteToWideChar(unsigned int CodePage, unsigned long dwFlags, const char *lpMultiByteStr,
             int cbMultiByte, wchar_t *lpWideCharStr, int cchWideChar);
             int __stdcall StrCmpLogicalW(wchar_t *psz1, wchar_t *psz2);

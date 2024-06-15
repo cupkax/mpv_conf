@@ -234,13 +234,20 @@ local function build_track_items(list, type, prop, prefix)
     -- filename without extension, escaped for pattern matching
     local filename = get('filename/no-ext', ''):gsub("[%(%)%.%%%+%-%*%?%[%]%^%$]", "%%%0")
     local pos = tonumber(get(prop)) or -1
+    local sub_visibility = get('sub-visibility')
+    local secondary_visibility = get('secondary-sub-visibility')
+
     for _, track in ipairs(list) do
         if track.type == type then
             local state = {}
-            -- there may be 2 tracks selected at the same time, for example: subtitle
-            if track.selected then
+            if track.selected and track.id == pos then
                 state[#state + 1] = 'checked'
-                if track.id ~= pos then state[#state + 1] = 'disabled' end
+                if not sub_visibility and prop == 'sid' then
+                    state[#state + 1] = 'disabled'
+                end
+                if not secondary_visibility and prop == 'secondary-sid' then
+                    state[#state + 1] = 'disabled'
+                end
             end
 
             items[#items + 1] = {
@@ -559,6 +566,7 @@ local function parse_input_conf(conf)
         local c = line:match('^%s*#')
         if c and (not o.uosc_syntax) then return end
         local key, cmd = line:match('%s*([%S]+)%s+(.-)%s*$')
+        if key and key:match('^#%S+') then return end
         return ((o.uosc_syntax and c) and '' or key), cmd
     end
 
@@ -661,6 +669,11 @@ end)
 -- detect uosc installation
 mp.register_script_message('uosc-version', function() has_uosc = true end)
 
+local commit_menu_timer = mp.add_timeout(0.1, function()
+    msg.debug('commit menu items: ' .. menu_prop)
+    mp.set_property_native(menu_prop, menu_items)
+end, true)
+
 -- update menu on idle, this reduces the update frequency
 mp.register_idle(function()
     if have_dirty_menus then
@@ -674,8 +687,8 @@ mp.register_idle(function()
     end
 
     if menu_items_dirty then
-        msg.debug('commit menu items: ' .. menu_prop)
-        mp.set_property_native(menu_prop, menu_items)
+        commit_menu_timer:kill()
+        commit_menu_timer:resume()
         menu_items_dirty = false
     end
 end)
@@ -688,13 +701,8 @@ if use_mpv_impl then
     end)
 
     local ignore_id = 0
-    mp.add_key_binding(nil, 'show', function()
+    mp.add_key_binding(nil, nil, function()
         mp.commandv('context-menu')
-        mp.add_forced_key_binding('MBTN_LEFT', 'left-ignore')
-        mp.add_forced_key_binding('MOUSE_MOVE', 'menu-close', function()
-            mp.remove_key_binding('menu-close')
-            mp.remove_key_binding('left-ignore')
-        end)
     end)
 else
     local menu_native = 'menu'
