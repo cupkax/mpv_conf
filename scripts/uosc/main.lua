@@ -93,6 +93,7 @@ defaults = {
 	'aac,ac3,aiff,ape,au,cue,dsf,dts,flac,m4a,mid,midi,mka,mp3,mp4a,oga,ogg,opus,spx,tak,tta,wav,weba,wma,wv',
 	image_types = 'apng,avif,bmp,gif,j2k,jp2,jfif,jpeg,jpg,jxl,mj2,png,svg,tga,tif,tiff,webp',
 	subtitle_types = 'aqt,ass,gsub,idx,jss,lrc,mks,pgs,pjs,psb,rt,sbv,slt,smi,sub,sup,srt,ssa,ssf,ttxt,txt,usf,vt,vtt',
+	playlist_types = 'm3u,m3u8,pls,url,cue',
 	default_directory = '~/',
 	show_hidden_files = false,
 	use_trash = false,
@@ -189,7 +190,10 @@ config = {
 		audio = comma_split(options.audio_types),
 		image = comma_split(options.image_types),
 		subtitle = comma_split(options.subtitle_types),
-		media = comma_split(options.video_types .. ',' .. options.audio_types .. ',' .. options.image_types),
+		media = comma_split(options.video_types
+			.. ',' .. options.audio_types
+			.. ',' .. options.image_types
+			.. ',' .. options.playlist_types),
 		autoload = (function()
 			---@type string[]
 			local option_values = {}
@@ -884,13 +888,13 @@ bind_command('playlist', create_self_updating_menu_opener({
 	list_prop = 'playlist',
 	serializer = function(playlist)
 		local items = {}
+		local playlist_titles = mp.get_property_native('user-data/playlistmanager/titles') or {}
 		for index, item in ipairs(playlist) do
 			local is_url = is_protocol(item.filename)
 			local item_title = type(item.title) == 'string' and #item.title > 0 and item.title or false
 			items[index] = {
-				title = (is_url and #playlist == 1 and mp.get_property('media-title')) or
-				        (is_url and item_title and item_title) or (is_url and url_decode(item.filename)) or
-					    serialize_path(item.filename).basename,
+				title = is_url and (item_title or playlist_titles[item.filename] or url_decode(item.filename)) or
+				serialize_path(item.filename).basename,
 				hint = tostring(index),
 				active = item.current,
 				value = index,
