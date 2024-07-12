@@ -44,6 +44,9 @@
         "slang": [
             "eng?",
             "und"
+        ],
+        "blacklist": [
+            "zh"
         ]
     },
     {
