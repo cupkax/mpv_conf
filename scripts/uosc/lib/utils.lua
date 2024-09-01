@@ -4,6 +4,8 @@
 ---@alias Rect {ax: number, ay: number, bx: number, by: number, window_drag?: boolean}
 ---@alias Circle {point: Point, r: number, window_drag?: boolean}
 ---@alias Hitbox Rect|Circle
+---@alias Shortcut {id: string; key: string; modifiers: string; alt: boolean; ctrl: boolean; shift: boolean}
+---@alias ComplexBindingInfo {event: 'down' | 'repeat' | 'up' | 'press'; is_mouse: boolean; canceled: boolean; key_name?: string; key_text?: string;}
 
 --- In place sorting of filenames
 ---@param filenames string[]
@@ -398,6 +400,26 @@ function has_any_extension(path, extensions)
 	return false
 end
 
+---@param key string
+---@param modifiers? string
+---@return Shortcut
+function create_shortcut(key, modifiers)
+	key = key:lower()
+
+	local id_parts, modifiers_set
+	if modifiers then
+		id_parts = split(modifiers:lower(), '+')
+		table.sort(id_parts, function(a, b) return a < b end)
+		modifiers_set = create_set(id_parts)
+		modifiers = table.concat(id_parts, '+')
+	else
+		id_parts, modifiers, modifiers_set = {}, '', {}
+	end
+	id_parts[#id_parts + 1] = key
+
+	return table_assign({id = table.concat(id_parts, '+'), key = key, modifiers = modifiers}, modifiers_set)
+end
+
 -- Executes mp command defined as a string or an itable, or does nothing if command is any other value.
 -- Returns boolean specifying if command was executed or not.
 ---@param command string | string[] | nil | any
@@ -412,11 +434,6 @@ function execute_command(command)
 		return true
 	end
 	return false
-end
-
----@return string
-function get_default_directory()
-	return mp.command_native({'expand-path', options.default_directory})
 end
 
 -- Serializes path into its semantic parts.
@@ -443,18 +460,17 @@ end
 -- Reads items in directory and splits it into directories and files tables.
 ---@param path string
 ---@param opts? {types?: string[], hidden?: boolean}
----@return string[]|nil files
----@return string[]|nil directories
+---@return string[] files
+---@return string[] directories
+---@return string|nil error
 function read_directory(path, opts)
 	opts = opts or {}
 	local items, error = utils.readdir(path, 'all')
+	local files, directories = {}, {}
 
 	if not items then
-		msg.error('Reading files from "' .. path .. '" failed: ' .. error)
-		return nil, nil
+		return files, directories, 'Reading directory "' .. path .. '" failed. Error: ' .. utils.to_string(error)
 	end
-
-	local files, directories = {}, {}
 
 	for _, item in ipairs(items) do
 		if item ~= '.' and item ~= '..' and (opts.hidden or item:sub(1, 1) ~= '.') then
@@ -483,8 +499,8 @@ function get_adjacent_files(file_path, opts)
 	opts = opts or {}
 	local current_meta = serialize_path(file_path)
 	if not current_meta then return end
-	local files = read_directory(current_meta.dirname, {hidden = opts.hidden})
-	if not files then return end
+	local files, _dirs, error = read_directory(current_meta.dirname, {hidden = opts.hidden})
+	if error then msg.error(error) return end
 	sort_strings(files)
 	local current_file_index
 	local paths = {}

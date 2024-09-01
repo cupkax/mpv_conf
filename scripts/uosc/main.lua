@@ -23,7 +23,7 @@ defaults = {
 	progress_line_width = 20,
 	timeline_persistency = '',
 	timeline_border = 1,
-	timeline_step = 5,
+	timeline_step = '5',
 	timeline_cache = true,
 
 	controls =
@@ -238,6 +238,8 @@ config = {
 	color = table_copy(config_defaults.color),
 	opacity = table_copy(config_defaults.opacity),
 	cursor_leave_fadeout_elements = {'timeline', 'volume', 'top_bar', 'controls'},
+	timeline_step = 5,
+	timeline_step_flag = '',
 }
 
 -- Updates config with values dependent on options
@@ -267,6 +269,13 @@ function update_config()
 	-- Global color shorthands
 	fg, bg = config.color.foreground, config.color.background
 	fgt, bgt = config.color.foreground_text, config.color.background_text
+
+	-- Timeline step
+	do
+		local is_exact = options.timeline_step:sub(-1) == '!'
+		config.timeline_step = tonumber(is_exact and options.timeline_step:sub(1, -2) or options.timeline_step)
+		config.timeline_step_flag = is_exact and 'exact' or ''
+	end
 end
 update_config()
 
@@ -347,11 +356,13 @@ state = {
 	alt_title = nil,
 	time = nil, -- current media playback time
 	speed = 1,
+	---@type number|nil
 	duration = nil, -- current media duration
 	time_human = nil, -- current playback time in human format
 	destination_time_human = nil, -- depends on options.destination_time
 	pause = mp.get_property_native('pause'),
 	chapters = {},
+	---@type {index: number; title: string}|nil
 	current_chapter = nil,
 	chapter_ranges = {},
 	border = mp.get_property_native('border'),
@@ -556,12 +567,16 @@ function load_file_index_in_current_directory(index)
 
 	local serialized = serialize_path(state.path)
 	if serialized and serialized.dirname then
-		local files = read_directory(serialized.dirname, {
+		local files, _dirs, error = read_directory(serialized.dirname, {
 			types = config.types.autoload,
 			hidden = options.show_hidden_files,
 		})
 
-		if not files then return end
+		if error then
+			msg.error(error)
+			return
+		end
+
 		sort_strings(files)
 		if index < 0 then index = #files + index + 1 end
 
@@ -584,11 +599,18 @@ function observe_display_fps(name, fps)
 end
 
 function select_current_chapter()
+	local current_chapter_index = state.current_chapter and state.current_chapter.index
 	local current_chapter
 	if state.time and state.chapters then
 		_, current_chapter = itable_find(state.chapters, function(c) return state.time >= c.time end, #state.chapters, 1)
 	end
-	set_state('current_chapter', current_chapter)
+	local new_chapter_index = current_chapter and current_chapter.index
+	if current_chapter_index ~= new_chapter_index then
+		set_state('current_chapter', current_chapter)
+		if itable_has(config.top_bar_flash_on, 'chapter') then
+			Elements:flash({'top_bar'})
+		end
+	end
 end
 
 --[[ STATE HOOKS ]]
@@ -904,11 +926,12 @@ bind_command('playlist', create_self_updating_menu_opener({
 		end
 		return items
 	end,
-	on_select = function(index) mp.commandv('set', 'playlist-pos-1', tostring(index)) end,
-	on_move_item = function(from, to)
-		mp.commandv('playlist-move', tostring(math.max(from, to) - 1), tostring(math.min(from, to) - 1))
+	on_activate = function(event) mp.commandv('set', 'playlist-pos-1', tostring(event.value)) end,
+	on_move = function(event)
+		local from, to = event.from_index, event.to_index
+		mp.commandv('playlist-move', tostring(from - 1), tostring(to - (to > from and 0 or 1)))
 	end,
-	on_delete_item = function(index) mp.commandv('playlist-remove', tostring(index - 1)) end,
+	on_remove = function(event) mp.commandv('playlist-remove', tostring(event.index - 1)) end,
 }))
 bind_command('chapters', create_self_updating_menu_opener({
 	title = t('Chapters'),
@@ -928,7 +951,7 @@ bind_command('chapters', create_self_updating_menu_opener({
 		end
 		return items
 	end,
-	on_select = function(index) mp.commandv('set', 'chapter', tostring(index - 1)) end,
+	on_activate = function(event) mp.commandv('set', 'chapter', tostring(event.value - 1)) end,
 }))
 bind_command('editions', create_self_updating_menu_opener({
 	title = t('Editions'),
@@ -948,7 +971,7 @@ bind_command('editions', create_self_updating_menu_opener({
 		end
 		return items
 	end,
-	on_select = function(id) mp.commandv('set', 'edition', id) end,
+	on_activate = function(event) mp.commandv('set', 'edition', event.value) end,
 }))
 bind_command('show-in-directory', function()
 	-- Ignore URLs
@@ -1029,7 +1052,7 @@ bind_command('audio-device', create_self_updating_menu_opener({
 		end
 		return items
 	end,
-	on_select = function(name) mp.commandv('set', 'audio-device', name) end,
+	on_activate = function(event) mp.commandv('set', 'audio-device', event.value) end,
 }))
 bind_command('open-config-directory', function()
 	local config_path = mp.command_native({'expand-path', '~~/mpv.conf'})
@@ -1076,6 +1099,17 @@ mp.register_script_message('update-menu', function(json)
 	else
 		local menu = data.type and Menu:is_open(data.type)
 		if menu then menu:update(data) end
+	end
+end)
+mp.register_script_message('select-menu-item', function(type, item_index, menu_id)
+	local menu = Menu:is_open(type)
+	local index = tonumber(item_index)
+	if menu and index and not menu.mouse_nav then
+		index = round(index)
+		if index > 0 and index <= #menu.current.items then
+			menu:select_index(index, menu_id)
+			menu:scroll_to_index(index, menu_id, true)
+		end
 	end
 end)
 mp.register_script_message('close-menu', function(type)
