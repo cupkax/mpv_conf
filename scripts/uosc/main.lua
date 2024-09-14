@@ -1,5 +1,5 @@
 --[[ uosc | https://github.com/tomasklaen/uosc ]]
-local uosc_version = '5.2.0'
+local uosc_version = '5.3.1'
 
 mp.commandv('script-message', 'uosc-version', uosc_version)
 
@@ -543,7 +543,8 @@ end
 
 function set_state(name, value)
 	state[name] = value
-	call_maybe(state['on_' .. name], value)
+	local state_event = state['on_' .. name]
+	if state_event then state_event(value) end
 	Elements:trigger('prop_' .. name, value)
 end
 
@@ -819,7 +820,7 @@ mp.observe_property('demuxer-cache-state', 'native', function(prop, cache_state)
 	for _, range in ipairs(cached_ranges) do
 		ranges[#ranges + 1] = {
 			math.max(range['start'] or 0, 0),
-			math.min(range['end'] or state.duration, state.duration),
+			math.min(range['end'] or state.duration --[[@as number]], state.duration),
 		}
 	end
 	table.sort(ranges, function(a, b) return a[1] < b[1] end)
@@ -889,27 +890,43 @@ bind_command('keybinds', function()
 end)
 bind_command('download-subtitles', open_subtitle_downloader)
 bind_command('load-subtitles', create_track_loader_menu_opener({
-	name = 'subtitles', prop = 'sub', allowed_types = itable_join(config.types.video, config.types.subtitle),
+	prop = 'sub',
+	title = t('Load subtitles'),
+	loaded_message = t('Loaded subtitles'),
+	allowed_types = itable_join(config.types.video, config.types.subtitle),
 }))
 bind_command('load-audio', create_track_loader_menu_opener({
-	name = 'audio', prop = 'audio', allowed_types = itable_join(config.types.video, config.types.audio),
+	prop = 'audio',
+	title = t('Load audio'),
+	loaded_message = t('Loaded audio'),
+	allowed_types = itable_join(config.types.video, config.types.audio),
 }))
 bind_command('load-video', create_track_loader_menu_opener({
-	name = 'video', prop = 'video', allowed_types = config.types.video,
+	prop = 'video',
+	title = t('Load video'),
+	loaded_message = t('Loaded video'),
+	allowed_types = config.types.video,
 }))
-bind_command('subtitles', create_select_tracklist_type_menu_opener(
-	t('Subtitles'), 'sub', 'sid', 'script-binding uosc/load-subtitles', 'script-binding uosc/download-subtitles'
-))
-bind_command('audio', create_select_tracklist_type_menu_opener(
-	t('Audio'), 'audio', 'aid', 'script-binding uosc/load-audio'
-))
-bind_command('video', create_select_tracklist_type_menu_opener(
-	t('Video'), 'video', 'vid', 'script-binding uosc/load-video'
-))
+bind_command('subtitles', create_select_tracklist_type_menu_opener({
+	title = t('Subtitles'),
+	type = 'sub',
+	prop = 'sid',
+	enable_prop = 'sub-visibility',
+	secondary = {prop = 'secondary-sid', icon = 'vertical_align_top', enable_prop = 'secondary-sub-visibility'},
+	load_command = 'script-binding uosc/load-subtitles',
+	download_command = 'script-binding uosc/download-subtitles',
+}))
+bind_command('audio', create_select_tracklist_type_menu_opener({
+	title = t('Audio'), type = 'audio', prop = 'aid', load_command = 'script-binding uosc/load-audio',
+}))
+bind_command('video', create_select_tracklist_type_menu_opener({
+	title = t('Video'), type = 'video', prop = 'vid', load_command = 'script-binding uosc/load-video',
+}))
 bind_command('playlist', create_self_updating_menu_opener({
 	title = t('Playlist'),
 	type = 'playlist',
 	list_prop = 'playlist',
+	footnote = t('Paste path or url to add.'),
 	serializer = function(playlist)
 		local items = {}
 		local playlist_titles = mp.get_property_native('user-data/playlistmanager/titles') or {}
@@ -927,6 +944,7 @@ bind_command('playlist', create_self_updating_menu_opener({
 		return items
 	end,
 	on_activate = function(event) mp.commandv('set', 'playlist-pos-1', tostring(event.value)) end,
+	on_paste = function(event) mp.commandv('loadfile', tostring(event.value), 'append') end,
 	on_move = function(event)
 		local from, to = event.from_index, event.to_index
 		mp.commandv('playlist-move', tostring(from - 1), tostring(to - (to > from and 0 or 1)))

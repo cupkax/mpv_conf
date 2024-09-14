@@ -1,5 +1,6 @@
+---@alias OpenCommandMenuOptions {submenu?: string; mouse_nav?: boolean; on_close?: string | string[]}
 ---@param data MenuData
----@param opts? {submenu?: string; mouse_nav?: boolean; on_close?: string | string[]}
+---@param opts? OpenCommandMenuOptions
 function open_command_menu(data, opts)
 	opts = opts or {}
 	local menu
@@ -30,7 +31,7 @@ function open_command_menu(data, opts)
 	return menu
 end
 
----@param opts? {submenu?: string; mouse_nav?: boolean; on_close?: string | string[]}
+---@param opts? OpenCommandMenuOptions
 function toggle_menu_with_items(opts)
 	if Menu:is_open('menu') then
 		Menu:close()
@@ -39,8 +40,9 @@ function toggle_menu_with_items(opts)
 	end
 end
 
----@alias EventRemove {type: 'remove' | 'delete', index: number; value: any; menu_id: string;}
----@param opts {type: string; title: string; list_prop: string; active_prop?: string; serializer: fun(list: any, active: any): MenuDataItem[]; actions?: MenuAction[];on_paste: fun(event: MenuEventPaste); on_move?: fun(event: MenuEventMove); on_activate?: fun(event: MenuEventActivate); on_remove?: fun(event: EventRemove); on_delete?: fun(event: EventRemove)}
+---@alias TrackEventRemove {type: 'remove' | 'delete', index: number; value: any;}
+---@alias TrackEventReload {type: 'reload', index: number; value: any;}
+---@param opts {type: string; title: string; list_prop: string; active_prop?: string; footnote?: string; serializer: fun(list: any, active: any): MenuDataItem[]; actions?: MenuAction[]; actions_place?: 'inside'|'outside'; on_paste: fun(event: MenuEventPaste); on_move?: fun(event: MenuEventMove); on_activate?: fun(event: MenuEventActivate); on_remove?: fun(event: TrackEventRemove); on_delete?: fun(event: TrackEventRemove); on_reload?: fun(event: TrackEventReload); on_key?: fun(event: MenuEventKey, close: fun())}
 function create_self_updating_menu_opener(opts)
 	return function()
 		if Menu:is_open(opts.type) then
@@ -73,17 +75,32 @@ function create_self_updating_menu_opener(opts)
 			end
 		end
 
+		local function cleanup_and_close()
+			mp.unobserve_property(handle_list_prop_change)
+			mp.unobserve_property(handle_active_prop_change)
+			menu:close()
+		end
+
 		local initial_items, selected_index = opts.serializer(list, active)
 
 		---@type MenuAction[]
 		local actions = opts.actions or {}
+		if opts.on_reload then
+			actions[#actions + 1] = {name = 'reload', icon = 'refresh', label = t('Reload') .. ' (f5)'}
+		end
 		if opts.on_move then
-			actions[#actions + 1] = {name = 'move_up', icon = 'arrow_upward', label = t('Move up')}
-			actions[#actions + 1] = {name = 'move_down', icon = 'arrow_downward', label = t('Move down')}
+			actions[#actions + 1] = {
+				name = 'move_up', icon = 'arrow_upward', label = t('Move up') .. ' (ctrl+up/pgup/home)'
+			}
+			actions[#actions + 1] = {
+				name = 'move_down', icon = 'arrow_downward', label = t('Move down') .. ' (ctrl+down/pgdwn/end)'
+			}
 		end
 		if opts.on_remove or opts.on_delete then
-			local label = opts.on_remove and t('Remove') or t('Delete')
-			if opts.on_remove and opts.on_delete then label = t('Remove (ctrl to delete)') end
+			local label = (opts.on_remove and t('Remove') or t('Delete')) .. ' (del)'
+			if opts.on_remove and opts.on_delete then
+				label = t('Remove') .. ' (' .. t('%s to delete', 'del, ctrl+del') .. ')'
+			end
 			actions[#actions + 1] = {name = 'remove', icon = 'delete', label = label}
 		end
 
@@ -92,13 +109,13 @@ function create_self_updating_menu_opener(opts)
 				local method = modifiers == 'ctrl' and 'delete' or 'remove'
 				local handler = method == 'delete' and opts.on_delete or opts.on_remove
 				if handler then
-					handler({type = method, value = value, index = index, menu_id = menu_id})
+					handler({type = method, value = value, index = index})
 				end
 			elseif opts.on_remove or opts.on_delete then
 				local method = opts.on_delete and 'delete' or 'remove'
 				local handler = opts.on_delete or opts.on_remove
 				if handler then
-					handler({type = method, value = value, index = index, menu_id = menu_id})
+					handler({type = method, value = value, index = index})
 				end
 			end
 		end
@@ -108,16 +125,21 @@ function create_self_updating_menu_opener(opts)
 		menu = Menu:open({
 			type = opts.type,
 			title = opts.title,
+			footnote = opts.footnote,
 			items = initial_items,
-			actions = actions,
+			item_actions = actions,
+			item_actions_place = opts.actions_place,
 			selected_index = selected_index,
 			on_move = opts.on_move and 'callback' or nil,
+			on_paste = opts.on_paste and 'callback' or nil,
 			on_close = 'callback',
 		}, function(event)
 			if event.type == 'activate' then
-				if (event.action == 'move_up' or event.action == 'move_down') and opts.on_move then
+				if event.action == 'reload' and opts.on_reload then
+					opts.on_reload({type = 'reload', index = event.index, value = event.value})
+				elseif (event.action == 'move_up' or event.action == 'move_down') and opts.on_move then
 					local to_index = event.index + (event.action == 'move_up' and -1 or 1)
-					if to_index > 1 and to_index <= #menu.current.items then
+					if to_index >= 1 and to_index <= #menu.current.items then
 						opts.on_move({
 							type = 'move',
 							from_index = event.index,
@@ -129,24 +151,28 @@ function create_self_updating_menu_opener(opts)
 					end
 				elseif event.action == 'remove' and (opts.on_remove or opts.on_delete) then
 					remove_or_delete(event.index, event.value, event.menu_id, event.modifiers)
-				elseif itable_has({'', 'shift'}, event.modifiers) then
+				else
 					opts.on_activate(event --[[@as MenuEventActivate]])
-					if event.modifiers == 'shift' then menu:close() end
+					if not event.modifiers and not event.action then cleanup_and_close() end
 				end
 			elseif event.type == 'key' then
+				local item = event.selected_item
 				if event.id == 'enter' then
-					menu:close()
-				elseif event.key == 'del' then
-					if itable_has({'', 'ctrl'}, event.modifiers) then
-						remove_or_delete(event.index, event.value, event.menu_id, event.modifiers)
+					-- We get here when there's no selectable item in menu and user presses enter.
+					cleanup_and_close()
+				elseif event.key == 'f5' and opts.on_reload and item then
+					opts.on_reload({type = 'reload', index = item.index, value = item.value})
+				elseif event.key == 'del' and (opts.on_remove or opts.on_delete) and item then
+					if itable_has({nil, 'ctrl'}, event.modifiers) then
+						remove_or_delete(item.index, item.value, event.menu_id, event.modifiers)
 					end
+				elseif opts.on_key then
+					opts.on_key(event --[[@as MenuEventKey]], cleanup_and_close)
 				end
 			elseif event.type == 'paste' and opts.on_paste then
 				opts.on_paste(event --[[@as MenuEventPaste]])
 			elseif event.type == 'close' then
-				mp.unobserve_property(handle_list_prop_change)
-				mp.unobserve_property(handle_active_prop_change)
-				menu:close()
+				cleanup_and_close()
 			elseif event.type == 'move' and opts.on_move then
 				opts.on_move(event --[[@as MenuEventMove]])
 			elseif event.type == 'remove' and opts.on_move then
@@ -160,33 +186,49 @@ function create_self_updating_menu_opener(opts)
 	end
 end
 
-function create_select_tracklist_type_menu_opener(menu_title, track_type, track_prop, load_command, download_command)
+---@param opts {title: string; type: string; prop: string; enable_prop?: string; secondary?: {prop: string; icon: string; enable_prop?: string}; load_command: string; download_command?: string}
+function create_select_tracklist_type_menu_opener(opts)
+	local snd = opts.secondary
+	local function get_props()
+		return tonumber(mp.get_property(opts.prop)), snd and tonumber(mp.get_property(snd.prop)) or nil
+	end
+
 	local function escape_codec(str)
 		if not str or str == '' then return '' end
-		if str:find("mpeg2") then return "mpeg2"
-		elseif str:find("dvvideo") then return "dv"
-		elseif str:find("pcm") then return "pcm"
-		elseif str:find("pgs") then return "pgs"
-		elseif str:find("subrip") then return "srt"
-		elseif str:find("vtt") then return "vtt"
-		elseif str:find("dvd_sub") then return "vob"
-		elseif str:find("dvb_sub") then return "dvb"
-		elseif str:find("dvb_tele") then return "teletext"
-		elseif str:find("arib") then return "arib"
-		else return str end
+	
+		local codec_map = {
+			mpeg2 = "mpeg2",
+			dvvideo = "dv",
+			pcm = "pcm",
+			pgs = "pgs",
+			subrip = "srt",
+			vtt = "vtt",
+			dvd_sub = "vob",
+			dvb_sub = "dvb",
+			dvb_tele = "teletext",
+			arib = "arib"
+		}
+	
+		for key, value in pairs(codec_map) do
+			if str:find(key) then
+				return value
+			end
+		end
+	
+		return str
 	end
 
 	local function serialize_tracklist(tracklist)
 		local items = {}
 
-		if load_command then
+		if opts.load_command then
 			items[#items + 1] = {
 				title = t('Load'),
 				bold = true,
 				italic = true,
 				hint = t('open file'),
 				value = '{load}',
-				actions = download_command
+				actions = opts.download_command
 					and {{name = 'download', icon = 'language', label = t('Search online')}}
 					or nil,
 			}
@@ -195,21 +237,28 @@ function create_select_tracklist_type_menu_opener(menu_title, track_type, track_
 			items[#items].separator = true
 		end
 
-		local track_prop_index = tonumber(mp.get_property(track_prop))
+		local track_prop_index, snd_prop_index = get_props()
 		local first_item_index = #items + 1
 		local active_index = nil
 		local disabled_item = nil
+		local track_actions = nil
+		local track_external_actions = {}
 
-		-- Add option to disable track. This works for all tracks.
-		if track_type ~= '' then
-			disabled_item = {title = t('Disabled'), italic = true, muted = true, hint = '—', value = nil, active = true}
-			items[#items + 1] = disabled_item
+		if snd then
+			local action = {
+				name = 'as_secondary', icon = snd.icon, label = t('Use as secondary') .. ' (shift+enter/click)',
+			}
+			track_actions = {action}
+			table.insert(track_external_actions, action)
 		end
+		table.insert(track_external_actions, {name = 'reload', icon = 'refresh', label = t('Reload') .. ' (f5)'})
+		table.insert(track_external_actions, {name = 'remove', icon = 'delete', label = t('Remove') .. ' (del)'})
 
 		for _, track in ipairs(tracklist) do
-			if track.type == track_type then
+			if track.type == opts.type then
 				local hint_values = {}
 				local track_selected = track.selected and track.id == track_prop_index
+				local snd_selected = snd and track.id == snd_prop_index
 				local function h(value) hint_values[#hint_values + 1] = value end
 
 				if track.lang then h(track.lang) end
@@ -241,7 +290,10 @@ function create_select_tracklist_type_menu_opener(menu_title, track_type, track_
 					title = (track.title and track.title or t('Track %s', track.id)),
 					hint = table.concat(hint_values, ', '),
 					value = track.id,
-					active = track_selected,
+					active = track_selected or snd_selected,
+					italic = snd_selected,
+					icon = snd and snd_selected and snd.icon or nil,
+					actions = track.external and track_external_actions or track_actions,
 				}
 
 				if track_selected then
@@ -254,31 +306,62 @@ function create_select_tracklist_type_menu_opener(menu_title, track_type, track_
 		return items, active_index or first_item_index
 	end
 
+	local function reload(id)
+		if id then mp.commandv(opts.type .. '-reload', id) end
+	end
+	local function remove(id)
+		if id then mp.commandv(opts.type .. '-remove', id) end
+	end
+
 	---@param event MenuEventActivate
 	local function handle_activate(event)
 		if event.value == '{load}' then
-			mp.command(event.action == 'download' and download_command or load_command)
+			mp.command(event.action == 'download' and opts.download_command or opts.load_command)
 		else
-			mp.commandv('set', track_prop, event.value and event.value or 'no')
+			if snd and (event.action == 'as_secondary' or event.modifiers == 'shift') then
+				local _, snd_track_index = get_props()
+				mp.commandv('set', snd.prop, event.value == snd_track_index and 'no' or event.value)
+				if snd.enable_prop then
+					mp.commandv('set', snd.enable_prop, 'yes')
+				end
+			elseif event.action == 'reload' then
+				reload(event.value)
+			elseif event.action == 'remove' then
+				remove(event.value)
+			elseif not event.modifiers or event.modifiers == 'alt' then
+				mp.commandv('set', opts.prop, event.value == get_props() and 'no' or event.value)
+				if opts.enable_prop then
+					mp.commandv('set', opts.enable_prop, 'yes')
+				end
+			end
+		end
+	end
 
-			-- If subtitle track was selected, assume the user also wants to see it
-			if event.value and track_type == 'sub' then
-				mp.commandv('set', 'sub-visibility', 'yes')
+	---@param event MenuEventKey
+	local function handle_key(event)
+		if event.selected_item then
+			if event.id == 'f5' then
+				reload(event.selected_item.value)
+			elseif event.id == 'del' then
+				remove(event.selected_item.value)
 			end
 		end
 	end
 
 	return create_self_updating_menu_opener({
-		title = menu_title,
-		type = track_type,
+		title = opts.title,
+		footnote = t('Toggle to disable.') .. ' ' .. t('Paste path or url to add.'),
+		type = opts.type,
 		list_prop = 'track-list',
 		serializer = serialize_tracklist,
 		on_activate = handle_activate,
-		on_paste = function(event) load_track(track_type, event.value) end,
+		on_key = handle_key,
+		actions_place = 'outside',
+		on_paste = function(event) load_track(opts.type, event.value) end,
 	})
 end
 
----@alias NavigationMenuOptions {type: string, title?: string, allowed_types?: string[], keep_open?: boolean, active_path?: string, selected_path?: string; on_close?: fun()}
+---@alias NavigationMenuOptions {type: string, title?: string, allowed_types?: string[], file_actions?: MenuAction[], directory_actions?: MenuAction[], active_path?: string, selected_path?: string; on_close?: fun()}
 
 -- Opens a file navigation menu with items inside `directory_path`.
 ---@param directory_path string
@@ -302,7 +385,7 @@ function open_file_navigation_menu(directory_path, handle_activate, opts)
 
 	---@param path string Can be path to a directory, or special string `'{drives}'` to get windows drives items.
 	---@param selected_path? string Marks item with this path as active.
-	---@return MenuStackValue[] menu_items
+	---@return MenuStackChild[] menu_items
 	---@return number selected_index
 	---@return string|nil error
 	local function serialize_items(path, selected_path)
@@ -366,11 +449,17 @@ function open_file_navigation_menu(directory_path, handle_activate, opts)
 		local selected_index = #items + 1
 
 		for _, dir in ipairs(directories) do
-			items[#items + 1] = {title = dir, value = join_path(path, dir), hint = separator}
+			items[#items + 1] = {
+				title = dir .. ' ' .. separator,
+				value = join_path(path, dir),
+				bold = true,
+				actions = opts
+					.directory_actions,
+			}
 		end
 
 		for _, file in ipairs(files) do
-			items[#items + 1] = {title = file, value = join_path(path, file)}
+			items[#items + 1] = {title = file, value = join_path(path, file), actions = opts.file_actions}
 		end
 
 		for index, item in ipairs(items) do
@@ -390,8 +479,10 @@ function open_file_navigation_menu(directory_path, handle_activate, opts)
 	local menu_data = {
 		type = opts.type,
 		title = opts.title or '',
+		footnote = t('%s to go up in tree.', 'alt+up') .. ' ' .. t('Paste path or url to open.'),
 		items = {},
 		on_close = opts.on_close and 'callback' or nil,
+		on_paste = 'callback',
 	}
 
 	---@param path string
@@ -443,18 +534,19 @@ function open_file_navigation_menu(directory_path, handle_activate, opts)
 			return
 		end
 
-		if info.is_dir and event.modifiers == '' then
+		if info.is_dir and not event.modifiers and not event.action then
 			open_directory(path)
 		else
 			handle_activate(event)
-			if not opts.keep_open then close() end
 		end
 	end
 	menu = Menu:open(menu_data, function(event)
 		if event.type == 'activate' then
 			activate(event --[[@as MenuEventActivate]])
-		elseif event.type == 'back' then
+		elseif event.type == 'back' or event.type == 'key' and event.id == 'alt+up' then
 			if back_path then open_directory(back_path) end
+		elseif event.type == 'paste' then
+			handle_activate({type = 'activate', value = event.value})
 		elseif event.type == 'close' then
 			close()
 		end
@@ -677,7 +769,7 @@ function open_stream_quality_menu()
 				mp.register_event('file-loaded', seeker)
 			end
 
-			if event.modifiers ~= 'shift' then menu:close() end
+			if not event.alt then menu:close() end
 		end
 	end)
 end
@@ -721,17 +813,27 @@ function open_open_file_menu()
 		function(event)
 			if not menu then return end
 			local command = has_any_extension(event.value, config.types.playlist) and 'loadlist' or 'loadfile'
-			if itable_has({'ctrl', 'ctrl+shift'}, event.modifiers) then
+			if event.modifiers == 'shift' or event.action == 'add_to_playlist' then
 				mp.commandv(command, event.value, 'append')
-			elseif event.modifiers == '' then
+				local serialized = serialize_path(event.value)
+				local filename = serialized and serialized.basename or event.value
+				mp.commandv('show-text', t('Added to playlist') .. ': ' .. filename, 3000)
+			elseif itable_has({nil, 'ctrl', 'alt', 'alt+ctrl'}, event.modifiers) and itable_has({nil, 'force_open'}, event.action) then
 				mp.commandv(command, event.value)
-				menu:close()
+				if not event.alt then menu:close() end
 			end
 		end,
 		{
 			type = 'open-file',
 			allowed_types = config.types.media,
 			active_path = active_file,
+			directory_actions = {
+				{name = 'add_to_playlist', icon = 'playlist_add', label = t('Add to playlist') .. ' (shift+enter/click)'},
+				{name = 'force_open', icon = 'play_circle_outline', label = t('Open in mpv') .. ' (ctrl+enter/click)'},
+			},
+			file_actions = {
+				{name = 'add_to_playlist', icon = 'playlist_add', label = t('Add to playlist') .. ' (shift+enter/click)'},
+			},
 			keep_open = true,
 			on_close = function() mp.unregister_event(handle_file_loaded) end,
 		}
@@ -739,21 +841,17 @@ function open_open_file_menu()
 	if menu then mp.register_event('file-loaded', handle_file_loaded) end
 end
 
----@param opts {name: 'subtitles'|'audio'|'video'; prop: 'sub'|'audio'|'video'; allowed_types: string[]}
+---@param opts {prop: 'sub'|'audio'|'video'; title: string; loaded_message: string; allowed_types: string[]}
 function create_track_loader_menu_opener(opts)
-	local menu_type = 'load-' .. opts.name
-	local title = ({
-		subtitles = t('Load subtitles'),
-		audio = t('Load audio'),
-		video = t('Load video'),
-	})[opts.name]
-
+	local menu_type = 'load-' .. opts.prop
 	return function()
 		if Menu:is_open(menu_type) then
 			Menu:close()
 			return
 		end
 
+		---@type Menu
+		local menu
 		local path = state.path
 		if path then
 			if is_protocol(path) then
@@ -768,11 +866,15 @@ function create_track_loader_menu_opener(opts)
 		end
 
 		local function handle_activate(event)
-			if event.modifiers == '' then load_track(opts.prop, event.value) end
+			load_track(opts.prop, event.value)
+			local serialized = serialize_path(event.value)
+			local filename = serialized and serialized.basename or event.value
+			mp.commandv('show-text', opts.loaded_message .. ': ' .. filename, 3000)
+			if not event.alt then menu:close() end
 		end
 
-		open_file_navigation_menu(path, handle_activate, {
-			type = menu_type, title = title, allowed_types = opts.allowed_types,
+		menu = open_file_navigation_menu(path, handle_activate, {
+			type = menu_type, title = opts.title, allowed_types = opts.allowed_types,
 		})
 	end
 end
@@ -959,11 +1061,14 @@ function open_subtitle_downloader()
 				local hints = {sub.attributes.language}
 				if sub.attributes.foreign_parts_only then hints[#hints + 1] = t('foreign parts only') end
 				if sub.attributes.hearing_impaired then hints[#hints + 1] = t('hearing impaired') end
+				local url = sub.attributes.url
 				return {
 					title = sub.attributes.release,
 					hint = table.concat(hints, ', '),
-					value = {kind = 'file', id = sub.attributes.files[1].file_id},
+					value = {kind = 'file', id = sub.attributes.files[1].file_id, url = url},
 					keep_open = true,
+					actions = url and
+						{{name = 'open_in_browser', icon = 'open_in_new', label = t('Open in browser') .. ' (shift)'}},
 				}
 			end)
 
@@ -1017,7 +1122,28 @@ function open_subtitle_downloader()
 		},
 		function(event)
 			if event.type == 'activate' then
-				handle_select(event.value)
+				if event.action == 'open_in_browser' or event.modifiers == 'shift' then
+					local command = ({
+						windows = 'explorer',
+						linux = 'xdg-open',
+						darwin = 'open',
+					})[state.platform]
+					local url = event.value.url
+					mp.command_native_async({
+						name = 'subprocess',
+						capture_stderr = true,
+						capture_stdout = true,
+						playback_only = false,
+						args = {command, url},
+					}, function(success, result, error)
+						if not success then
+							local err_str = utils.to_string(error or result.stderr)
+							msg.error('Error trying to open url "' .. url .. '" in browser: ' .. err_str)
+						end
+					end)
+				elseif not event.action then
+					handle_select(event.value)
+				end
 			elseif event.type == 'search' then
 				handle_search(event.query)
 			end
