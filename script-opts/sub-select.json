@@ -1,43 +1,31 @@
 [
     {
         "alang": [
-            "eng?",
-            "und"
+            "eng?"
         ],
-        "slang": [
-            "eng?",
-            "und"
-        ],
-        "condition": "sub.forced"
+        "slang": "no"
     },
     {
         "alang": [
             "jpn",
-            "ja"
+            "ja",
+            "*"
         ],
-        "slang": "eng?",
-        "blacklist": [
-            "sign"
-        ]
-    },
-    {
-        "inherit": "^",
-        "slang": "und"
-    },
-    {
-        "alang": "eng?",
         "slang": [
             "eng?",
             "und"
         ],
-        "whitelist": [
+        "blacklist": [
             "sign",
-            "song"
+            "symbol",
+            "s&s",
+            "[Ss]igns?",
+            "[Ss]ymbols?"
+        ],
+        "whitelist": [
+            "[Dd]ialog",
+            "[Dd]ialogue"
         ]
-    },
-    {
-        "alang": "eng?",
-        "slang": "no"
     },
     {
         "alang": "*",
@@ -46,11 +34,16 @@
             "und"
         ],
         "blacklist": [
-            "zh"
-        ]
-    },
-    {
-        "alang": "no",
-        "slang": "no"
+            "sign",
+            "symbol",
+            "s&s",
+            "[Ss]igns?",
+            "[Ss]ymbols?"
+        ],
+        "whitelist": [
+            "[Dd]ialog",
+            "[Dd]ialogue"
+        ],
+        "condition": "sub.forced"
     }
 ]
