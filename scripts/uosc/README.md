@@ -110,7 +110,7 @@ Features:
 To build ziggy (our utility binary) yourself, run:
 
 ```
-tools/build
+tools/build ziggy
 ```
 
 Which will run the `tools/build(.ps1)` script that builds it for each platform. It requires [go](https://go.dev/) to be installed. Source code is in `src/ziggy`.
@@ -312,6 +312,26 @@ Show current file in your operating systems' file explorer.
 #### `audio-device`
 
 Switch audio output device.
+
+#### `paste`, `paste-to-open`, `paste-to-playlist`
+
+Commands to paste path or URL in clipboard to either open immediately, or append to playlist.
+
+`paste` will add to playlist if there's any (`playlist-count > 1`), or open immediately otherwise.
+
+`paste-to-playlist` will also open the pasted file if mpv is idle (no file open).
+
+Note: there are alternative ways to open stuff from clipboard without the need to bind these commands:
+
+- When `open-file` menu is open → `ctrl+v` to open path/URL in clipboard.
+- When `playlist` menu is open → `ctrl+v` to add path/URL in clipboard to playlist.
+- When any track menu (`subtitles`, `audio`, `video`) is open → `ctrl+v` to add path/URL in clipboard as a new track.
+
+#### `copy-to-clipboard`
+
+Copy currently open path or URL to clipboard.
+
+Additionally, you can also press `ctrl+c` to copy path of a selected item in `playlist` or all directory listing menus.
 
 #### `open-config-directory`
 
