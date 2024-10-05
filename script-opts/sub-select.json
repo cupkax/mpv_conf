@@ -28,22 +28,24 @@
         ]
     },
     {
+        "alang": [
+            "kor",
+            "ko",
+            "*"
+        ],
+        "slang": [
+            "eng?",
+            "und"
+        ]
+    },
+    {
         "alang": "*",
         "slang": [
             "eng?",
             "und"
         ],
         "blacklist": [
-            "sign",
-            "symbol",
-            "s&s",
-            "[Ss]igns?",
-            "[Ss]ymbols?"
-        ],
-        "whitelist": [
-            "[Dd]ialog",
-            "[Dd]ialogue"
-        ],
-        "condition": "sub.forced"
+            "zh"
+        ]
     }
 ]
