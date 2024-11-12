@@ -1,5 +1,5 @@
 --[[
-    * track-list.lua v.2024-09-02
+    * track-list.lua v.2024-11-11
     *
     * AUTHORS: dyphire
     * License: MIT
@@ -35,7 +35,7 @@ local o = {
     selected_style = [[{\c&Hfce788&}]],
     active_style = [[{\c&H33ff66&}]],
     cursor = [[➤\h]],
-    indent = [[\h\h\h\h]],
+    indent = [[\h\h\h]],
     --amount of entries to show before slicing. Optimal value depends on font/video size etc.
     num_entries = 16,
     --slice long filenames, and how many chars to show
@@ -147,8 +147,13 @@ local function get_track_title(track, type, filename)
     local codec = escape_codec(track.codec)
 
     if track.external and title ~= '' then
-        if filename ~= '' then title = title:gsub(filename .. '%.?', '') end
-        if title:lower() == codec:lower() then title = '' end
+        local extension = title:match('%.([^%.]+)$')
+        if filename ~= '' and extension then
+            title = title:gsub(filename .. '%.?', ''):gsub('%.?([^%.]+)$', '')
+        end
+        if track.lang and title:lower() == track.lang:lower() then
+            title = ''
+        end
     end
     local title_clip = utf8_sub(title, 1, o.max_title_length)
     if title ~= title_clip then
@@ -280,13 +285,11 @@ add_keys(o.key_remove_track, 'remove_track', removeTrack, {})
 add_keys(o.key_close_browser, 'close_browser', function() list:close() end, {})
 
 function list:open()
-    -- 根据 list_type 设置相应的菜单
     video_menu = (list_type == "video")
     audio_menu = (list_type == "audio")
     sub_menu = (list_type == "sub")
     sub2_menu = (list_type == "sub2")
 
-    -- 调用原始的 open 函数
     original_open(self)
 end
 
@@ -300,7 +303,6 @@ local function toggleList(type, prop)
     list_type = type
     list_prop = prop
 
-    -- 定义一个本地函数来处理菜单切换逻辑
     local function toggleMenu(menu)
         if _G[menu] then
             _G[menu] = false
@@ -309,7 +311,6 @@ local function toggleList(type, prop)
         end
     end
 
-    -- 根据类型调用相应的菜单
     if type == "video" then
         toggleMenu("video_menu")
     elseif type == "audio" then
