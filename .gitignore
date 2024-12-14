@@ -1,12 +1,8 @@
-misc_files/
 playlists/
 files/
 dyphire_config/
-commit-rename.sh
 saved-props.json
 *.log
 *.xml
 *.txt
 *.history
-dyphire_config_commit_merge_status.txt
-scripts/webtorrent.js
