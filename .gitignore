@@ -1,4 +1,5 @@
 playlists/
+.vscode/
 files/
 dyphire_config/
 saved-props.json

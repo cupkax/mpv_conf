@@ -524,7 +524,7 @@ function prepare_elements()
                                 static_ass:line_to(s + 3, slider_lo.gap - 5)
                                 static_ass:line_to(s, slider_lo.gap - 1)
                             end
-                            --bottom
+                            --Bottom
                             if (slider_lo.nibbles_bottom) then
                                 static_ass:move_to(s - 3, elem_geo.h - slider_lo.gap + 5)
                                 static_ass:line_to(s, elem_geo.h - slider_lo.gap + 1)
@@ -535,7 +535,7 @@ function prepare_elements()
                             if (slider_lo.nibbles_top) then
                                 static_ass:rect_cw(s - 1, 0, s + 1, slider_lo.gap);
                             end
-                            --bottom
+                            --Bottom
                             if (slider_lo.nibbles_bottom) then
                                 static_ass:rect_cw(s - 1, elem_geo.h-slider_lo.gap, s + 1, elem_geo.h);
                             end
@@ -664,7 +664,7 @@ function render_elements(master_ass)
                     ass_append_alpha(elem_ass, slider_lo.alpha, 0)
                     elem_ass:append(tooltiplabel)
 
-                    -- thumbnail
+                    -- Thumbnail
                     if element.thumbnail and not thumbfast.disabled then
                         local osd_w = mp.get_property_number("osd-width")
                         if osd_w then
@@ -714,7 +714,7 @@ function render_elements(master_ass)
             buttontext = buttontext:gsub(':%((.?.?.?)%) unknown ', ':%(%1%)')  --gsub('%) unknown %(\'', '')
 
             local maxchars = element.layout.button.maxchars
-            -- 认为1个中文字符约等于1.5个英文字符
+            -- It is believed that 1 Chinese character is approximately equal to 1.5 English characters
             local charcount = (buttontext:len() + select(2, buttontext:gsub('[^\128-\193]', ''))*2) / 3
             if not (maxchars == nil) and (charcount > maxchars) then
                 local limit = math.max(0, maxchars - 3)
@@ -1105,7 +1105,7 @@ layouts = function ()
     lo.slider.tooltip_style = osc_styles.Tooltip
     lo.slider.tooltip_an = 2
         
-    -- buttons
+    -- Buttons
     lo = add_layout('pl_prev')
     lo.geometry = {x = refX - 120, y = refY - 40 , an = 5, w = 30, h = 24}
     lo.style = osc_styles.Ctrl2
@@ -1245,7 +1245,7 @@ function osc_init()
     ne.eventresponder['mbtn_right_up'] =
         function () show_message(get_playlist()) end
 
-    --next
+    --Next
     ne = new_element('pl_next', 'button')
 
     ne.content = '\xEF\x8E\xB4'
@@ -1274,7 +1274,7 @@ function osc_init()
     --ne.eventresponder['mbtn_right_up'] =
     --    function () mp.commandv('script-binding', 'open-file-dialog') end
 
-    --skipback
+    --Skipback
     ne = new_element('skipback', 'button')
 
     ne.softrepeat = true
@@ -1288,7 +1288,7 @@ function osc_init()
         --function () mp.command('seek -60') end
         function () mp.commandv('seek', -60, 'relative', 'keyframes') end
 
-    --skipfrwd
+    --Skipfrwd
     ne = new_element('skipfrwd', 'button')
 
     ne.softrepeat = true
@@ -1305,7 +1305,7 @@ function osc_init()
     --
     update_tracklist()
     
-    --cy_audio
+    --Cy audio
     ne = new_element('cy_audio', 'button')
     ne.enabled = (#tracks_osc.audio > 0)
     ne.visible = (osc_param.playresx >= 540)
@@ -1335,7 +1335,7 @@ function osc_init()
     ne.eventresponder['mbtn_mid_up'] =
         function () show_message(get_tracklist('audio')) end
                 
-    --cy_sub
+    --Cy sub
     ne = new_element('cy_sub', 'button')
     ne.enabled = (#tracks_osc.sub > 0)
     ne.visible = (osc_param.playresx >= 600)
@@ -1365,7 +1365,7 @@ function osc_init()
     ne.eventresponder['mbtn_mid_up'] =
         function () show_message(get_tracklist('sub')) end
         
-    -- vol_ctrl
+    -- Vol ctrl
     ne = new_element('vol_ctrl', 'button')
     ne.enabled = (get_track('audio')>0)
     ne.visible = (osc_param.playresx >= 650) and user_opts.volumecontrol
@@ -1379,7 +1379,7 @@ function osc_init()
     ne.eventresponder['mbtn_left_up'] =
         function () mp.commandv('cycle', 'mute') end
         
-    --tog_fs
+    --Took e.g
     ne = new_element('tog_fs', 'button')
     ne.content = function ()
         if (state.fullscreen) then
@@ -1392,14 +1392,14 @@ function osc_init()
     ne.eventresponder['mbtn_left_up'] =
         function () mp.commandv('cycle', 'fullscreen') end
 
-    --tog_info
+    --That info
     ne = new_element('tog_info', 'button')
     ne.content = ''
     ne.visible = (osc_param.playresx >= 600)
     ne.eventresponder['mbtn_left_up'] =
         function () mp.commandv('script-binding', 'stats/display-stats-toggle') end
 
-    -- title
+    -- Title
     ne = new_element('title', 'button')
     ne.content = function ()
         local title = mp.command_native({'expand-text', user_opts.title})
@@ -1412,7 +1412,7 @@ function osc_init()
     end
     ne.visible = osc_param.playresy >= 320 and user_opts.showtitle
     
-    --seekbar
+    --Seekbar
     ne = new_element('seekbar', 'slider')
 
     ne.enabled = not (mp.get_property('percent-pos') == nil)
@@ -1529,7 +1529,7 @@ function osc_init()
     ne.eventresponder['reset'] =
         function (element) element.state.lastseek = nil end
 
-    --volumebar
+    --Volumebar
     ne = new_element('volumebar', 'slider')
     ne.visible = (osc_param.playresx >= 700) and user_opts.volumecontrol
     ne.enabled = (get_track('audio')>0)
@@ -1843,7 +1843,7 @@ function render()
         end
     end
 
-    -- autohide
+    -- Autohide
     if not (state.showtime == nil) and (get_hidetimeout() >= 0) then
         local timeout = state.showtime + (get_hidetimeout()/1000) - now
         if timeout <= 0 then
@@ -1857,7 +1857,7 @@ function render()
                 state.hide_timer = mp.add_timeout(0, tick)
             end
             state.hide_timer.timeout = timeout
-            -- re-arm
+            -- Re arm
             state.hide_timer:kill()
             state.hide_timer:resume()
         end
@@ -1875,7 +1875,7 @@ function render()
         render_elements(ass)
     end
 
-    -- submit
+    -- Submit
     set_osd(osc_param.playresy * osc_param.display_aspect,
             osc_param.playresy, ass.text)
 end
