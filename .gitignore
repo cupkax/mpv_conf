@@ -1,9 +1,11 @@
-playlists/
-.vscode/
-files/
-dyphire_config/
-saved-props.json
 *.log
 *.xml
 *.txt
-*.history
+config.json
+
+cache/
+files/
+playlists/
+dyphire_config/
+
+scripts/webtorrent.js
