@@ -244,14 +244,13 @@ local function hash(path)
     else --windows
         -- https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-filehash?view=powershell-7.3
         local hash_command = [[
-            $s = [System.IO.MemoryStream]::new();
-            $w = [System.IO.StreamWriter]::new($s);
-            $w.write(']] .. path .. [[');
-            $w.Flush();
-            $s.Position = 0;
-            Get-FileHash -Algorithm MD5 -InputStream $s | Select-Object -ExpandProperty Hash
+            $str = ']] .. path .. [[';
+            $md5 = [System.Security.Cryptography.MD5]::Create();
+            $utf8 = [System.Text.UTF8Encoding]::new();
+            $hash = [System.BitConverter]::ToString($md5.ComputeHash($utf8.GetBytes($str))).Replace('-', '');
+            Write-Output $hash;
         ]]
-
+        
         args = {"powershell", "-NoProfile", "-Command", hash_command}
     end
     cmd["args"] = args
