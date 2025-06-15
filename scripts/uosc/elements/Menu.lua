@@ -3,13 +3,13 @@ local Element = require('elements/Element')
 ---@alias MenuAction {name: string; icon: string; label?: string; filter_hidden?: boolean;}
 
 -- Menu data structure accepted by `Menu:open(menu)`.
----@alias MenuData {id?: string; type?: string; title?: string; hint?: string; footnote: string; search_style?: 'on_demand' | 'palette' | 'disabled';  item_actions?: MenuAction[]; item_actions_place?: 'inside' | 'outside'; callback?: string[]; keep_open?: boolean; bold?: boolean; italic?: boolean; muted?: boolean; separator?: boolean; align?: 'left'|'center'|'right'; items?: MenuDataChild[]; selected_index?: integer; on_search?: string|string[]; on_paste?: string|string[]; on_move?: string|string[]; on_close?: string|string[]; search_debounce?: number|string; search_submenus?: boolean; search_suggestion?: string; search_submit?: boolean}
+---@alias MenuData {id?: string; type?: string; title?: string; hint?: string; footnote: string; search_style?: 'on_demand' | 'palette' | 'disabled';  item_actions?: MenuAction[]; item_actions_place?: 'inside' | 'outside'; callback?: string[]; keep_open?: boolean; bold?: boolean; italic?: boolean; muted?: boolean; separator?: boolean; align?: 'left'|'center'|'right'; items?: MenuDataChild[]; selected_index?: integer; on_search?: string|string[]; on_paste?: string|string[]; on_move?: string|string[]; on_close?: string|string[]; search_debounce?: number|string; search_submenus?: boolean; search_suggestion?: string; search_submit?: boolean; bind_keys?: string[]}
 ---@alias MenuDataChild MenuDataItem|MenuData
 ---@alias MenuDataItem {title?: string; hint?: string; icon?: string; value: any; actions?: MenuAction[]; actions_place?: 'inside' | 'outside'; active?: boolean; keep_open?: boolean; selectable?: boolean; bold?: boolean; italic?: boolean; muted?: boolean; separator?: boolean; align?: 'left'|'center'|'right'}
 ---@alias MenuOptions {mouse_nav?: boolean;}
 
 -- Internal data structure created from `MenuData`.
----@alias MenuStack {id?: string; type?: string; title?: string; hint?: string; footnote: string; search_style?: 'on_demand' | 'palette' | 'disabled';  item_actions?: MenuAction[]; item_actions_place?: 'inside' | 'outside'; callback?: string[]; selected_index?: number; action_index?: number; keep_open?: boolean; bold?: boolean; italic?: boolean; muted?: boolean; separator?: boolean; align?: 'left'|'center'|'right'; items: MenuStackChild[]; on_search?: string|string[]; on_paste?: string|string[]; on_move?: string|string[]; on_close?: string|string[]; search_debounce?: number|string; search_submenus?: boolean; search_suggestion?: string; search_submit?: boolean; parent_menu?: MenuStack; submenu_path: integer[]; active?: boolean; width: number; height: number; top: number; scroll_y: number; scroll_height: number; title_width: number; hint_width: number; max_width: number; is_root?: boolean; fling?: Fling, search?: Search, ass_safe_title?: string}
+---@alias MenuStack {id?: string; type?: string; title?: string; hint?: string; footnote: string; search_style?: 'on_demand' | 'palette' | 'disabled';  item_actions?: MenuAction[]; item_actions_place?: 'inside' | 'outside'; callback?: string[]; selected_index?: number; action_index?: number; keep_open?: boolean; bold?: boolean; italic?: boolean; muted?: boolean; separator?: boolean; align?: 'left'|'center'|'right'; items: MenuStackChild[]; on_search?: string|string[]; on_paste?: string|string[]; on_move?: string|string[]; on_close?: string|string[]; search_debounce?: number|string; search_submenus?: boolean; search_suggestion?: string; search_submit?: boolean; bind_keys?: string[]; parent_menu?: MenuStack; submenu_path: integer[]; active?: boolean; width: number; height: number; top: number; scroll_y: number; scroll_height: number; title_width: number; hint_width: number; max_width: number; is_root?: boolean; fling?: Fling, search?: Search, ass_safe_title?: string}
 ---@alias MenuStackChild MenuStackItem|MenuStack
 ---@alias MenuStackItem {title?: string; hint?: string; icon?: string; value: any; actions?: MenuAction[]; actions_place?: 'inside' | 'outside'; active?: boolean; keep_open?: boolean; selectable?: boolean; bold?: boolean; italic?: boolean; muted?: boolean; separator?: boolean; align?: 'left'|'center'|'right'; title_width: number; hint_width: number; ass_safe_hint?: string}
 ---@alias Fling {y: number, distance: number, time: number, easing: fun(x: number), duration: number, update_cursor?: boolean}
@@ -777,7 +777,9 @@ function Menu:paste()
 	local menu = self.current
 	local payload = get_clipboard()
 	if not payload then return end
-	if menu.on_paste then
+	if menu.search then
+		self:search_query_insert(payload)
+	elseif menu.on_paste then
 		local selected_item = menu.items and menu.selected_index and menu.items[menu.selected_index]
 		local actions = selected_item and selected_item.actions or menu.item_actions
 		local selected_action = actions and menu.action_index and actions[menu.action_index]
@@ -789,8 +791,6 @@ function Menu:paste()
 				index = menu.selected_index, value = selected_item.value, action = selected_action,
 			},
 		})
-	elseif menu.search then
-		self:search_query_replace(menu.search.query .. payload)
 	elseif menu.search_style ~= 'disabled' then
 		self:search_start(menu.id)
 		self:search_query_replace(payload, menu.id)
@@ -883,7 +883,18 @@ function Menu:search_cursor_move(amount, word_mode)
 	if word_mode then
 		menu.search.cursor = find_string_segment_bound(query, cursor, amount) + (amount < 0 and -1 or 0)
 	else
-		menu.search.cursor = clamp(0, cursor + amount, #query)
+		local move = amount > 0 and utf8_next or utf8_prev
+		local step_count = 0
+		local limit = math.abs(amount)
+
+		while step_count < limit do
+			local next_cursor = move(query, cursor)
+			if next_cursor == cursor then break end
+			cursor = next_cursor
+			step_count = step_count + 1
+		end
+
+		menu.search.cursor = clamp(0, cursor, #query)
 	end
 	request_render()
 end
@@ -975,22 +986,21 @@ function Menu:search_query_delete(event, word_mode)
 
 	local cursor, old_query = search.cursor, search.query
 	local head, tail = string.sub(old_query, 1, cursor), string.sub(old_query, cursor + 1)
-	local tail_cursor = 1
 
 	if word_mode then
-		tail_cursor = find_string_segment_bound(tail, 0, 1) + 1
-	else
+		cursor = find_string_segment_bound(head, cursor, -1) - 1
+	elseif cursor > 0 then
 		-- The while loop is for skipping utf8 continuation bytes
-		while tail_cursor < #tail and tail:byte(tail_cursor) >= 0x80 and tail:byte(tail_cursor) <= 0xbf do
-			tail_cursor = tail_cursor + 1
+		while cursor > 1 and old_query:byte(cursor) >= 0x80 and old_query:byte(cursor) <= 0xbf do
+			cursor = cursor - 1
 		end
-		tail_cursor = tail_cursor + 1
+		cursor = cursor - 1
 	end
 
-	local new_query = head .. tail:sub(tail_cursor)
+	local new_query = head:sub(1, cursor) .. tail
 	if new_query ~= old_query then
 		search.query = new_query
-		search.cursor = #head
+		search.cursor = math.max(0, cursor)
 		self:search_trigger()
 	end
 
@@ -1109,27 +1119,22 @@ function Menu:search_ensure_key_bindings()
 end
 
 function Menu:enable_key_bindings()
+	local standalone_keys = {'/', 'kp_divide', 'mbtn_back', 'ctrl+f', 'ctrl+v', 'ctrl+c'}
+	if type(self.root.bind_keys) == 'table' then itable_append(standalone_keys, self.root.bind_keys) end
 	-- `+` at the end enables `repeatable` flag
-	local standalone_keys = {
-		'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12', '/', 'kp_divide', 'mbtn_back',
-		{'f', 'ctrl'}, {'v', 'ctrl'}, {'c', 'ctrl'},
-	}
 	local modifiable_keys = {'up+', 'down+', 'left', 'right', 'enter', 'kp_enter', 'bs', 'tab', 'esc', 'pgup+',
 		'pgdwn+', 'home', 'end', 'del'}
 	local modifiers = {nil, 'alt', 'alt+ctrl', 'alt+shift', 'alt+ctrl+shift', 'ctrl', 'ctrl+shift', 'shift'}
-	local normalized = {kp_enter = 'enter'}
 
-	local function bind(key, modifier, flags)
-		local binding = modifier and modifier .. '+' .. key or key
-		local shortcut = create_shortcut(normalized[key] or key, modifier)
+	---@param shortcut Shortcut
+	---@param flags table<string, boolean>
+	local function bind(shortcut, flags)
 		local handler = self:create_action(function(info) self:handle_shortcut(shortcut, info) end)
-		self:add_key_binding(binding, {handler, flags})
+		self:add_key_binding(shortcut.id, {handler, flags})
 	end
 
-	for i, key_mods in ipairs(standalone_keys) do
-		local is_table = type(key_mods) == 'table'
-		local key, mods = is_table and key_mods[1] or key_mods, is_table and key_mods[2] or nil
-		bind(key, mods, {repeatable = false, complex = true})
+	for i, key in ipairs(standalone_keys) do
+		bind(create_shortcut(key), {repeatable = false, complex = true})
 	end
 
 	for i, key in ipairs(modifiable_keys) do
@@ -1141,7 +1146,7 @@ function Menu:enable_key_bindings()
 		end
 
 		for j = 1, #modifiers do
-			bind(key, modifiers[j], flags)
+			bind(create_shortcut(key, modifiers[j]), flags)
 		end
 	end
 
@@ -1163,6 +1168,16 @@ function Menu:handle_shortcut(shortcut, info)
 	local selected_action = actions and menu.action_index and actions[menu.action_index]
 
 	if info.event == 'up' then return end
+
+	function trigger_shortcut(shortcut)
+		self.callback(table_assign({}, shortcut, {
+			type = 'key',
+			menu_id = menu.id,
+			selected_item = selected_item and {
+				index = selected_index, value = selected_item.value, action = selected_action,
+			},
+		}))
+	end
 
 	if (key == 'enter' and selected_item) or (id == 'right' and is_submenu and not menu.search) then
 		self:activate_selected_item(shortcut)
@@ -1219,20 +1234,20 @@ function Menu:handle_shortcut(shortcut, info)
 		elseif not modifiers and info.event ~= 'repeat' then
 			self:back()
 		end
-	elseif menu.search and (id == 'del' or id == 'ctrl+del') then
-		self:search_query_delete(info.event, modifiers == 'ctrl')
+	elseif menu.search and (id == 'del' or id == 'ctrl+del' or id == 'shift+del') then
+		if id == 'shift+del' then
+			-- During search `del` edits the string. We convert `shift+del` to
+			-- `del` to have a way to trigger menu callbacks bound to `del`.
+			trigger_shortcut(create_shortcut('del'))
+		else
+			self:search_query_delete(info.event, modifiers == 'ctrl')
+		end
 	elseif key == 'mbtn_back' then
 		self:back()
 	elseif id == 'ctrl+v' then
 		self:paste()
 	else
-		self.callback(table_assign({}, shortcut, {
-			type = 'key',
-			menu_id = menu.id,
-			selected_item = selected_item and {
-				index = selected_index, value = selected_item.value, action = selected_action,
-			},
-		}))
+		trigger_shortcut(shortcut)
 	end
 end
 
@@ -1669,8 +1684,9 @@ function Menu:render()
 					local query, cursor = menu.search.query, menu.search.cursor
 					-- Add a ZWNBSP suffix to prevent libass from trimming trailing spaces
 					local head = ass_escape(string.sub(query, 1, cursor)) .. '\239\187\191'
-					local tail = ass_escape(string.sub(query, cursor + 1)) .. '\239\187\191'
-					cursor_ax = math.max(round(cursor_ax - text_width(tail, opts)), rect.cx)
+					local tail_no_escape = string.sub(query, cursor + 1)
+					local tail = ass_escape(tail_no_escape) .. '\239\187\191'
+					cursor_ax = math.max(round(cursor_ax - text_width(tail_no_escape, opts)), rect.cx)
 					ass:txt(cursor_ax, rect.cy, 6, head, opts)
 					ass:txt(cursor_ax, rect.cy, 4, tail, opts)
 				else
